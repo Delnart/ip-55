@@ -1,9 +1,10 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from bot.utils.api import ScheduleAPI
 from bot.keyboards.user import get_schedule_inline_keyboard, get_main_keyboard
 from database.models import LinksManager
+from config import GROUP_ID
 
 router = Router()
 
@@ -24,9 +25,9 @@ async def cmd_start(message: Message, is_admin: bool):
     
     await message.answer(welcome_text, reply_markup=get_main_keyboard())
 
-@router.message(Command("help"))
+@router.message(Command("help"), ~F.chat.id.in_({GROUP_ID}))
 async def cmd_help(message: Message):
-    """Обробка команди /help"""
+    """Обробка команди /help в приватних повідомленнях"""
     help_text = """
 📖 Довідка по боту:
 
@@ -101,10 +102,10 @@ async def get_all_links(message: Message):
     
     await message.answer(response, parse_mode="Markdown", disable_web_page_preview=True)
 
-# Обробка інлайн кнопок
-@router.callback_query(F.data.startswith("schedule_"))
+# Обробка інлайн кнопок для приватних повідомлень
+@router.callback_query(F.data.startswith("schedule_"), ~F.message.chat.id.in_({GROUP_ID}))
 async def process_schedule_callback(callback: CallbackQuery):
-    """Обробка інлайн кнопок розкладу"""
+    """Обробка інлайн кнопок розкладу в приватних повідомленнях"""
     action = callback.data.replace("schedule_", "")
     
     if action == "today":
@@ -115,16 +116,28 @@ async def process_schedule_callback(callback: CallbackQuery):
         schedule = await ScheduleAPI.get_week_schedule(0)
     elif action == "next_week":
         schedule = await ScheduleAPI.get_week_schedule(1)
+    elif action == "back":
+        await callback.message.edit_text(
+            "📅 Оберіть розклад:",
+            reply_markup=get_schedule_inline_keyboard()
+        )
+        await callback.answer()
+        return
     else:
         await callback.answer("❌ Невідома команда")
         return
     
-    await callback.message.edit_text(schedule)
+    # Створюємо клавіатуру з кнопкою "Назад"
+    back_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="schedule_back")]
+    ])
+    
+    await callback.message.edit_text(schedule, reply_markup=back_keyboard)
     await callback.answer()
 
-@router.message(Command("schedule"))
+@router.message(Command("schedule"), ~F.chat.id.in_({GROUP_ID}))
 async def cmd_schedule(message: Message):
-    """Команда /schedule з інлайн кнопками"""
+    """Команда /schedule з інлайн кнопками в приватних повідомленнях"""
     await message.answer(
         "📅 Оберіть розклад:",
         reply_markup=get_schedule_inline_keyboard()

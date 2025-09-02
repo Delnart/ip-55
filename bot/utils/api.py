@@ -12,6 +12,31 @@ class ScheduleAPI:
     """Клас для роботи з API розкладу КПІ"""
     
     @staticmethod
+    def get_week_number(date: datetime) -> int:
+        """Отримання номера навчального тижня (1 - перший, 2 - другий)"""
+        # Конвертуємо в naive datetime для обчислень
+        if date.tzinfo is not None:
+            date = date.replace(tzinfo=None)
+        
+        # Початок навчального року (1 вересня поточного року)
+        year = date.year
+        if date.month < 9:  # Якщо до вересня - беремо попередній рік
+            year -= 1
+        
+        # 1 вересня як початок навчального року
+        start_of_year = datetime(year, 9, 1)
+        
+        # Знаходимо перший понеділок навчального року
+        days_since_monday = start_of_year.weekday()
+        first_monday = start_of_year - timedelta(days=days_since_monday)
+        
+        # Різниця в тижнях від початку навчального року
+        weeks_diff = (date - first_monday).days // 7
+        
+        # Повертаємо 1 або 2 (перший або другий тиждень)
+        return (weeks_diff % 2) + 1
+    
+    @staticmethod
     async def get_schedule() -> Optional[Dict[str, Any]]:
         """Отримання розкладу з API"""
         try:
@@ -57,10 +82,10 @@ class ScheduleAPI:
             kiev_tz = pytz.timezone(TIMEZONE)
             now = datetime.now(kiev_tz)
             today = now.strftime('%A')
-            week_number = now.isocalendar()[1]
             
-            # Визначаємо тиждень (перший чи другий)
-            week_key = 'scheduleFirstWeek' if week_number % 2 == 1 else 'scheduleSecondWeek'
+            # Використовуємо нову функцію для визначення тижня
+            week_number = ScheduleAPI.get_week_number(now)
+            week_key = 'scheduleFirstWeek' if week_number == 1 else 'scheduleSecondWeek'
             
             # Перекладаємо назву дня
             day_mapping = {
@@ -89,7 +114,8 @@ class ScheduleAPI:
                 return f"📅 На сьогодні ({DAYS_TRANSLATION[day_code]}) пар немає"
             
             # Форматуємо розклад
-            result = f"📅 Розклад на сьогодні ({DAYS_TRANSLATION[day_code]}):\n\n"
+            week_name = "1-й тиждень" if week_number == 1 else "2-й тиждень"
+            result = f"📅 Розклад на сьогодні ({DAYS_TRANSLATION[day_code]}, {week_name}):\n\n"
             
             for i, class_data in enumerate(today_classes, 1):
                 result += f"{i}. {ScheduleAPI.format_class_info(class_data)}\n"
@@ -112,10 +138,10 @@ class ScheduleAPI:
             kiev_tz = pytz.timezone(TIMEZONE)
             tomorrow = datetime.now(kiev_tz) + timedelta(days=1)
             tomorrow_day = tomorrow.strftime('%A')
-            week_number = tomorrow.isocalendar()[1]
             
-            # Визначаємо тиждень
-            week_key = 'scheduleFirstWeek' if week_number % 2 == 1 else 'scheduleSecondWeek'
+            # Використовуємо нову функцію для визначення тижня
+            week_number = ScheduleAPI.get_week_number(tomorrow)
+            week_key = 'scheduleFirstWeek' if week_number == 1 else 'scheduleSecondWeek'
             
             # Перекладаємо назву дня
             day_mapping = {
@@ -125,12 +151,18 @@ class ScheduleAPI:
                 'Thursday': 'Чт',
                 'Friday': 'Пт',
                 'Saturday': 'Сб',
-                'Sunday': 'Сб'  # Неділя -> показуємо наступний понеділок
+                'Sunday': 'Пн'  # Неділя -> показуємо наступний понеділок
             }
             
             day_code = day_mapping.get(tomorrow_day)
             if not day_code:
                 return "❌ Не вдалося визначити день тижня"
+            
+            # Якщо завтра неділя, показуємо понеділок
+            if tomorrow_day == 'Sunday':
+                tomorrow = tomorrow + timedelta(days=1)
+                week_number = ScheduleAPI.get_week_number(tomorrow)
+                week_key = 'scheduleFirstWeek' if week_number == 1 else 'scheduleSecondWeek'
             
             # Шукаємо розклад на завтра
             week_schedule = schedule_data.get(week_key, [])
@@ -145,7 +177,8 @@ class ScheduleAPI:
                 return f"📅 На завтра ({DAYS_TRANSLATION[day_code]}) пар немає"
             
             # Форматуємо розклад
-            result = f"📅 Розклад на завтра ({DAYS_TRANSLATION[day_code]}):\n\n"
+            week_name = "1-й тиждень" if week_number == 1 else "2-й тиждень"
+            result = f"📅 Розклад на завтра ({DAYS_TRANSLATION[day_code]}, {week_name}):\n\n"
             
             for i, class_data in enumerate(tomorrow_classes, 1):
                 result += f"{i}. {ScheduleAPI.format_class_info(class_data)}\n"
@@ -167,17 +200,20 @@ class ScheduleAPI:
             # Визначаємо тиждень
             kiev_tz = pytz.timezone(TIMEZONE)
             target_date = datetime.now(kiev_tz) + timedelta(weeks=week_offset)
-            week_number = target_date.isocalendar()[1]
             
-            week_key = 'scheduleFirstWeek' if week_number % 2 == 1 else 'scheduleSecondWeek'
+            # Використовуємо нову функцію для визначення тижня
+            week_number = ScheduleAPI.get_week_number(target_date)
+            week_key = 'scheduleFirstWeek' if week_number == 1 else 'scheduleSecondWeek'
+            
             week_name = "Поточний тиждень" if week_offset == 0 else "Наступний тиждень"
+            week_type = "1-й тиждень" if week_number == 1 else "2-й тиждень"
             
             week_schedule = schedule_data.get(week_key, [])
             
             if not week_schedule:
                 return f"❌ Розклад на {week_name.lower()} не знайдено"
             
-            result = f"📅 {week_name}:\n\n"
+            result = f"📅 {week_name} ({week_type}):\n\n"
             
             for day_data in week_schedule:
                 day_code = day_data.get('day')

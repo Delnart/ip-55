@@ -59,10 +59,10 @@ class NotificationScheduler:
             
             # Визначаємо поточний день та тиждень
             today = now.strftime('%A')
-            week_number = now.isocalendar()[1]
             
-            # Визначаємо тиждень (перший чи другий)
-            week_key = 'scheduleFirstWeek' if week_number % 2 == 1 else 'scheduleSecondWeek'
+            # Використовуємо нову функцію для визначення тижня
+            week_number = ScheduleAPI.get_week_number(now)
+            week_key = 'scheduleFirstWeek' if week_number == 1 else 'scheduleSecondWeek'
             
             # Перекладаємо назву дня
             day_mapping = {
@@ -117,7 +117,10 @@ class NotificationScheduler:
             # Створюємо datetime об'єкт для пари на сьогодні
             kiev_tz = pytz.timezone(TIMEZONE)
             today = current_time.date()
-            class_datetime = kiev_tz.localize(datetime.combine(today, class_time))
+            
+            # Створюємо naive datetime і потім локалізуємо
+            class_datetime_naive = datetime.combine(today, class_time)
+            class_datetime = kiev_tz.localize(class_datetime_naive)
             
             # Час коли треба надіслати повідомлення
             notification_time = class_datetime - timedelta(minutes=NOTIFICATION_MINUTES_BEFORE)

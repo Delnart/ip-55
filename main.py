@@ -36,10 +36,10 @@ async def main():
         dp.message.middleware(AuthMiddleware())
         dp.callback_query.middleware(AuthMiddleware())
         
-        # Підключення handlers
+        # Підключення handlers (ВАЖЛИВО: group роутер має бути першим!)
+        dp.include_router(group.router)  # Групові команди обробляються першими
         dp.include_router(admin.router)
-        dp.include_router(schedule.router)
-        dp.include_router(group.router)
+        dp.include_router(schedule.router)  # Приватні команди обробляються після групових
         
         # Підключення до бази даних
         await db.connect()
