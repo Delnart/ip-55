@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -248,6 +248,146 @@ async def switch_to_user_mode(message: Message):
         reply_markup=get_main_keyboard()
     )
 
+
+@router.message(F.text == "🗑 Видалити посилання", admin_only())
+async def start_delete_link(message: Message, state: FSMContext):
+    """Початок процесу видалення посилання"""
+    links = await LinksManager.get_all_links()
+    
+    if not links:
+        await message.answer("📭 Посилання для видалення не знайдено.")
+        return
+    
+    response = "🗑 **Видалення посилань**\n\nОберіть посилання для видалення:\n\n"
+    
+    keyboard = []
+    
+    for i, link in enumerate(links, 1):
+        subject = link.get('subject_name', 'Невідомий предмет')
+        teacher = link.get('teacher_name', 'Невідомий викладач')
+        class_type = link.get('class_type', '')
+        
+        response += f"{i}. **{subject}** - {teacher} ({class_type})\n"
+        
+        # Створюємо унікальний ID для кнопки
+        link_id = f"{subject}|{teacher}|{class_type}"
+        keyboard.append([InlineKeyboardButton(
+            text=f"{i}. {subject} ({class_type})",
+            callback_data=f"delete_link_{i-1}"
+        )])
+    
+    keyboard.append([InlineKeyboardButton(text="❌ Скасувати", callback_data="cancel")])
+    
+    await message.answer(
+        response,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="Markdown"
+    )
+    
+    # Зберігаємо список посилань в стані
+    await state.update_data(links=links)
+    await state.set_state(DeleteLinkStates.waiting_for_selection)
+
+@router.callback_query(F.data.startswith("delete_link_"), DeleteLinkStates.waiting_for_selection)
+async def confirm_delete_link(callback: CallbackQuery, state: FSMContext):
+    """Підтвердження видалення посилання"""
+    try:
+        link_index = int(callback.data.replace("delete_link_", ""))
+        data = await state.get_data()
+        links = data.get('links', [])
+        
+        if link_index >= len(links):
+            await callback.answer("❌ Невірний вибір")
+            return
+        
+        selected_link = links[link_index]
+        subject = selected_link.get('subject_name', '')
+        teacher = selected_link.get('teacher_name', '')
+        class_type = selected_link.get('class_type', '')
+        
+        await callback.message.edit_text(
+            f"🗑 **Видалення посилання**\n\n"
+            f"📚 **Предмет:** {subject}\n"
+            f"👨‍🏫 **Викладач:** {teacher}\n"
+            f"📝 **Тип:** {class_type}\n\n"
+            f"❗️ Ви впевнені, що хочете видалити це посилання?",
+            reply_markup=get_confirm_delete_keyboard(str(link_index))
+        )
+        
+        await callback.answer()
+        
+    except ValueError:
+        await callback.answer("❌ Помилка вибору")
+
+@router.callback_query(F.data.startswith("delete_confirm_"))
+async def delete_link_confirmed(callback: CallbackQuery, state: FSMContext):
+    """Остаточне видалення посилання"""
+    try:
+        link_index = int(callback.data.replace("delete_confirm_", ""))
+        data = await state.get_data()
+        links = data.get('links', [])
+        
+        if link_index >= len(links):
+            await callback.answer("❌ Невірний вибір")
+            return
+        
+        selected_link = links[link_index]
+        subject = selected_link.get('subject_name', '')
+        teacher = selected_link.get('teacher_name', '')
+        class_type = selected_link.get('class_type', '')
+        
+        success = await LinksManager.delete_link(subject, teacher, class_type)
+        
+        if success:
+            await callback.message.edit_text(
+                f"✅ **Посилання успішно видалено!**\n\n"
+                f"📚 **Предмет:** {subject}\n"
+                f"👨‍🏫 **Викладач:** {teacher}\n"
+                f"📝 **Тип:** {class_type}"
+            )
+        else:
+            await callback.message.edit_text("❌ Помилка видалення посилання.")
+        
+        await state.clear()
+        await callback.answer("Посилання видалено" if success else "Помилка видалення")
+        
+    except ValueError:
+        await callback.answer("❌ Помилка видалення")
+
+@router.callback_query(F.data == "delete_cancel")
+async def cancel_delete_link(callback: CallbackQuery, state: FSMContext):
+    """Скасування видалення посилання"""
+    await callback.message.edit_text("❌ Видалення скасовано.")
+    await state.clear()
+    await callback.answer("Видалення скасовано")
+
+@router.message(F.text == "👤 Користувач", admin_only())
+async def switch_to_user_mode(message: Message):
+    """Перехід у користувацький режим"""
+    await message.answer(
+        "👤 Перехід у користувацький режим.\n\n"
+        "Для повернення до панелі адміна використовуйте /admin",
+        reply_markup=get_main_keyboard()
+    )
+
+@router.message(F.text == "⚙️ Налаштування", admin_only())
+async def show_settings(message: Message):
+    """Показати налаштування бота"""
+    settings_text = f"""
+⚙️ **Налаштування бота:**
+
+🔔 **Сповіщення:** За {NOTIFICATION_MINUTES_BEFORE} хв до початку пари
+🕒 **Часова зона:** {TIMEZONE}
+👥 **ID групи:** `{GROUP_ID}`
+🤖 **Версія:** 1.0
+
+📊 **Статистика:**
+• Посилань у базі: {len(await LinksManager.get_all_links())}
+• Учасників групи: {len(await GroupMembersManager.get_all_members())}
+    """
+    
+    await message.answer(settings_text, parse_mode="Markdown")
+
 # Обробка скасування операцій
 @router.callback_query(F.data.in_(["cancel", "cancel_add_link"]))
 async def cancel_operation(callback: CallbackQuery, state: FSMContext):
@@ -258,3 +398,6 @@ async def cancel_operation(callback: CallbackQuery, state: FSMContext):
         reply_markup=None
     )
     await callback.answer("Операцію скасовано")
+
+
+
