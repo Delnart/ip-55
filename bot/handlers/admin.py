@@ -11,6 +11,7 @@ from bot.keyboards.admin import (
     get_confirm_delete_keyboard
 )
 from bot.keyboards.user import get_main_keyboard
+from config import NOTIFICATION_MINUTES_BEFORE, TIMEZONE, GROUP_ID
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,17 +29,24 @@ class DeleteLinkStates(StatesGroup):
     waiting_for_selection = State()
 
 # Фільтр для адміна
-def admin_only():
-    async def check(message: Message, is_admin: bool) -> bool:
+def admin_filter():
+    async def check(obj: Message | CallbackQuery, is_admin: bool) -> bool:
         if not is_admin:
-            await message.answer("❌ Ця команда доступна тільки адміністратору.")
+            if isinstance(obj, Message):
+                await obj.answer("❌ Ця команда доступна тільки адміністратору.")
+            elif isinstance(obj, CallbackQuery):
+                await obj.answer("❌ Ця команда доступна тільки адміністратору.", show_alert=True)
             return False
         return True
     return check
 
-@router.message(Command("admin"), admin_only())
-async def cmd_admin(message: Message):
+@router.message(Command("admin"))
+async def cmd_admin(message: Message, is_admin: bool):
     """Панель адміністратора"""
+    if not is_admin:
+        await message.answer("❌ Ця команда доступна тільки адміністратору.")
+        return
+        
     admin_text = """
 🔧 **Панель адміністратора**
 
@@ -54,9 +62,13 @@ async def cmd_admin(message: Message):
     
     await message.answer(admin_text, reply_markup=get_admin_keyboard())
 
-@router.message(F.text == "➕ Додати посилання", admin_only())
-async def start_add_link(message: Message, state: FSMContext):
+@router.message(F.text == "➕ Додати посилання")
+async def start_add_link(message: Message, state: FSMContext, is_admin: bool):
     """Початок процесу додавання посилання"""
+    if not is_admin:
+        await message.answer("❌ Ця команда доступна тільки адміністратору.")
+        return
+        
     await message.answer(
         "🔗 **Додавання посилання на пару**\n\n"
         "Оберіть тип заняття:",
@@ -184,9 +196,13 @@ async def process_classroom_link(message: Message, state: FSMContext):
     
     await state.clear()
 
-@router.message(F.text == "📋 Всі посилання", admin_only())
-async def show_all_links_admin(message: Message):
+@router.message(F.text == "📋 Всі посилання")
+async def show_all_links_admin(message: Message, is_admin: bool):
     """Показати всі посилання (адмін версія)"""
+    if not is_admin:
+        await message.answer("❌ Ця команда доступна тільки адміністратору.")
+        return
+        
     links = await LinksManager.get_all_links()
     
     if not links:
@@ -213,9 +229,13 @@ async def show_all_links_admin(message: Message):
     
     await message.answer(response, parse_mode="Markdown", disable_web_page_preview=True)
 
-@router.message(F.text == "👥 Учасники групи", admin_only())
-async def show_group_members(message: Message):
+@router.message(F.text == "👥 Учасники групи")
+async def show_group_members(message: Message, is_admin: bool):
     """Показати учасників групи"""
+    if not is_admin:
+        await message.answer("❌ Ця команда доступна тільки адміністратору.")
+        return
+        
     members = await GroupMembersManager.get_all_members()
     
     if not members:
@@ -239,19 +259,13 @@ async def show_group_members(message: Message):
     
     await message.answer(response, parse_mode="Markdown")
 
-@router.message(F.text == "👤 Користувач", admin_only())
-async def switch_to_user_mode(message: Message):
-    """Перехід у користувацький режим"""
-    await message.answer(
-        "👤 Перехід у користувацький режим.\n\n"
-        "Для повернення до панелі адміна використовуйте /admin",
-        reply_markup=get_main_keyboard()
-    )
-
-
-@router.message(F.text == "🗑 Видалити посилання", admin_only())
-async def start_delete_link(message: Message, state: FSMContext):
+@router.message(F.text == "🗑 Видалити посилання")
+async def start_delete_link(message: Message, state: FSMContext, is_admin: bool):
     """Початок процесу видалення посилання"""
+    if not is_admin:
+        await message.answer("❌ Ця команда доступна тільки адміністратору.")
+        return
+        
     links = await LinksManager.get_all_links()
     
     if not links:
@@ -269,8 +283,6 @@ async def start_delete_link(message: Message, state: FSMContext):
         
         response += f"{i}. **{subject}** - {teacher} ({class_type})\n"
         
-        # Створюємо унікальний ID для кнопки
-        link_id = f"{subject}|{teacher}|{class_type}"
         keyboard.append([InlineKeyboardButton(
             text=f"{i}. {subject} ({class_type})",
             callback_data=f"delete_link_{i-1}"
@@ -361,18 +373,29 @@ async def cancel_delete_link(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.answer("Видалення скасовано")
 
-@router.message(F.text == "👤 Користувач", admin_only())
-async def switch_to_user_mode(message: Message):
+@router.message(F.text == "👤 Користувач")
+async def switch_to_user_mode(message: Message, is_admin: bool):
     """Перехід у користувацький режим"""
+    if not is_admin:
+        await message.answer("❌ Ця команда доступна тільки адміністратору.")
+        return
+        
     await message.answer(
         "👤 Перехід у користувацький режим.\n\n"
         "Для повернення до панелі адміна використовуйте /admin",
         reply_markup=get_main_keyboard()
     )
 
-@router.message(F.text == "⚙️ Налаштування", admin_only())
-async def show_settings(message: Message):
+@router.message(F.text == "⚙️ Налаштування")
+async def show_settings(message: Message, is_admin: bool):
     """Показати налаштування бота"""
+    if not is_admin:
+        await message.answer("❌ Ця команда доступна тільки адміністратору.")
+        return
+        
+    links_count = len(await LinksManager.get_all_links())
+    members_count = len(await GroupMembersManager.get_all_members())
+    
     settings_text = f"""
 ⚙️ **Налаштування бота:**
 
@@ -382,8 +405,8 @@ async def show_settings(message: Message):
 🤖 **Версія:** 1.0
 
 📊 **Статистика:**
-• Посилань у базі: {len(await LinksManager.get_all_links())}
-• Учасників групи: {len(await GroupMembersManager.get_all_members())}
+• Посилань у базі: {links_count}
+• Учасників групи: {members_count}
     """
     
     await message.answer(settings_text, parse_mode="Markdown")
@@ -398,6 +421,3 @@ async def cancel_operation(callback: CallbackQuery, state: FSMContext):
         reply_markup=None
     )
     await callback.answer("Операцію скасовано")
-
-
-
