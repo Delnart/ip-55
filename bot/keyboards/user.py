@@ -5,7 +5,8 @@ def get_main_keyboard() -> ReplyKeyboardMarkup:
     keyboard = [
         [KeyboardButton(text="📅 Розклад на сьогодні"), KeyboardButton(text="📅 Розклад на завтра")],
         [KeyboardButton(text="📄 Поточний тиждень"), KeyboardButton(text="📄 Наступний тиждень")],
-        [KeyboardButton(text="🔗 Посилання на пари")]
+        [KeyboardButton(text="🔗 Посилання на пари")],
+        [KeyboardButton(text="📝 Мої ДЗ")]  # НОВА КНОПКА
     ]
     
     return ReplyKeyboardMarkup(
@@ -28,3 +29,4 @@ def get_schedule_inline_keyboard() -> InlineKeyboardMarkup:
     ]
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+

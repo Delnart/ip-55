@@ -5,6 +5,7 @@ def get_admin_keyboard() -> ReplyKeyboardMarkup:
     keyboard = [
         [KeyboardButton(text="➕ Додати посилання"), KeyboardButton(text="📋 Всі посилання")],
         [KeyboardButton(text="👥 Учасники групи"), KeyboardButton(text="🗑 Видалити посилання")],
+        [KeyboardButton(text="📝 Управління ДЗ")],  # НОВА КНОПКА
         [KeyboardButton(text="👤 Користувач"), KeyboardButton(text="⚙️ Налаштування")]
     ]
     
