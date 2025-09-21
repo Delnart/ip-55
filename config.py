@@ -8,7 +8,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 
 # ID групи та адміна
-GROUP_ID = int(os.getenv('GROUP_ID'))
+GROUP_ID = int(os.getenv('GROUP_ID', '-4956301173'))
 ADMIN_ID = int(os.getenv('ADMIN_ID'))
 
 # MongoDB

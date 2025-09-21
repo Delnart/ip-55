@@ -43,14 +43,51 @@ class LinksManager:
     
     @staticmethod
     async def get_link(subject_name: str, teacher_name: str, class_type: str) -> Optional[Dict[str, Any]]:
-        """Отримання посилання на пару"""
+        """Отримання посилання на пару з гнучким пошуком"""
         try:
+            # Спочатку точний пошук
             link = await db.db.links.find_one({
                 "subject_name": subject_name,
                 "teacher_name": teacher_name,
                 "class_type": class_type
             })
+            
+            if link:
+                return link
+            
+            # Якщо точний не знайшов - пробуємо пошук по предмету та викладачу
+            link = await db.db.links.find_one({
+                "subject_name": subject_name,
+                "teacher_name": teacher_name
+            })
+            
+            if link:
+                return link
+            
+            # Пошук тільки по предмету (якщо викладач різний)
+            link = await db.db.links.find_one({
+                "subject_name": subject_name
+            })
+            
+            if link:
+                return link
+            
+            # НОВЕ: Гнучкий пошук по частині назви предмета
+            # Пошук з регулярними виразами (нечутливий до регістру)
+            link = await db.db.links.find_one({
+                "subject_name": {"$regex": subject_name.replace(" ", ".*"), "$options": "i"}
+            })
+            
+            if link:
+                return link
+            
+            # Пошук по частині назви викладача
+            link = await db.db.links.find_one({
+                "teacher_name": {"$regex": teacher_name.replace(" ", ".*"), "$options": "i"}
+            })
+            
             return link
+            
         except Exception as e:
             logger.error(f"Помилка отримання посилання: {e}")
             return None
@@ -84,6 +121,19 @@ class LinksManager:
         except Exception as e:
             logger.error(f"Помилка видалення посилання: {e}")
             return False
+    
+    @staticmethod
+    async def search_links_by_subject(subject_name: str) -> List[Dict[str, Any]]:
+        """Пошук посилань по назві предмета (для діагностики)"""
+        try:
+            cursor = db.db.links.find({
+                "subject_name": {"$regex": subject_name, "$options": "i"}
+            })
+            links = await cursor.to_list(length=None)
+            return links
+        except Exception as e:
+            logger.error(f"Помилка пошуку посилань: {e}")
+            return []
 
 class GroupMembersManager:
     """Клас для роботи з учасниками групи"""

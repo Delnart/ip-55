@@ -53,8 +53,10 @@ class ScheduleAPI:
             return None
     
     @staticmethod
-    def format_class_info(class_data: Dict[str, Any]) -> str:
-        """Форматування інформації про пару"""
+    async def format_class_info(class_data: Dict[str, Any]) -> str:
+        """Форматування інформації про пару з посиланнями"""
+        from database.models import LinksManager
+        
         class_type = CLASS_TYPES.get(class_data.get('type', ''), class_data.get('type', ''))
         time = class_data.get('time', '')
         name = class_data.get('name', '')
@@ -68,11 +70,26 @@ class ScheduleAPI:
         if place:
             info += f"📍 {place}\n"
         
+        # НОВЕ: Шукаємо посилання для цієї пари
+        link_data = await LinksManager.get_link(name, teacher, class_data.get('type', ''))
+        
+        if link_data:
+            meet_link = link_data.get('meet_link')
+            classroom_link = link_data.get('classroom_link')
+            
+            if meet_link:
+                info += f"🔗 [Приєднатися до зустрічі]({meet_link})\n"
+            
+            if classroom_link:
+                info += f"📖 [Google Classroom]({classroom_link})\n"
+        else:
+            info += f"⚠️ Посилання не додані\n"
+        
         return info
     
     @staticmethod
     async def get_today_schedule() -> str:
-        """Розклад на сьогодні"""
+        """Розклад на сьогодні з посиланнями"""
         try:
             schedule_data = await ScheduleAPI.get_schedule()
             if not schedule_data:
@@ -113,12 +130,13 @@ class ScheduleAPI:
             if not today_classes:
                 return f"📅 На сьогодні ({DAYS_TRANSLATION[day_code]}) пар немає"
             
-            # Форматуємо розклад
+            # Форматуємо розклад з посиланнями
             week_name = "1-й тиждень" if week_number == 1 else "2-й тиждень"
             result = f"📅 Розклад на сьогодні ({DAYS_TRANSLATION[day_code]}, {week_name}):\n\n"
             
             for i, class_data in enumerate(today_classes, 1):
-                result += f"{i}. {ScheduleAPI.format_class_info(class_data)}\n"
+                class_info = await ScheduleAPI.format_class_info(class_data)
+                result += f"{i}. {class_info}\n"
             
             return result
             
@@ -128,7 +146,7 @@ class ScheduleAPI:
     
     @staticmethod
     async def get_tomorrow_schedule() -> str:
-        """Розклад на завтра"""
+        """Розклад на завтра з посиланнями"""
         try:
             schedule_data = await ScheduleAPI.get_schedule()
             if not schedule_data:
@@ -176,12 +194,13 @@ class ScheduleAPI:
             if not tomorrow_classes:
                 return f"📅 На завтра ({DAYS_TRANSLATION[day_code]}) пар немає"
             
-            # Форматуємо розклад
+            # Форматуємо розклад з посиланнями
             week_name = "1-й тиждень" if week_number == 1 else "2-й тиждень"
             result = f"📅 Розклад на завтра ({DAYS_TRANSLATION[day_code]}, {week_name}):\n\n"
             
             for i, class_data in enumerate(tomorrow_classes, 1):
-                result += f"{i}. {ScheduleAPI.format_class_info(class_data)}\n"
+                class_info = await ScheduleAPI.format_class_info(class_data)
+                result += f"{i}. {class_info}\n"
             
             return result
             
@@ -191,7 +210,7 @@ class ScheduleAPI:
     
     @staticmethod
     async def get_week_schedule(week_offset: int = 0) -> str:
-        """Розклад на тиждень (0 - поточний, 1 - наступний)"""
+        """Розклад на тиждень з посиланнями (0 - поточний, 1 - наступний)"""
         try:
             schedule_data = await ScheduleAPI.get_schedule()
             if not schedule_data:
@@ -223,7 +242,8 @@ class ScheduleAPI:
                 if pairs:
                     result += f"📌 {day_name}:\n"
                     for i, class_data in enumerate(pairs, 1):
-                        result += f"{i}. {ScheduleAPI.format_class_info(class_data)}\n"
+                        class_info = await ScheduleAPI.format_class_info(class_data)
+                        result += f"{i}. {class_info}\n"
                     result += "\n"
             
             return result

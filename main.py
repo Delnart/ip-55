@@ -7,7 +7,7 @@ from database.connection import db
 from bot.handlers import admin, schedule, group
 from bot.middlewares.auth import AuthMiddleware
 from bot.utils.scheduler import NotificationScheduler
-from config import BOT_TOKEN
+from config import BOT_TOKEN, GROUP_ID
 
 # Налаштування логування
 logging.basicConfig(
@@ -21,6 +21,12 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+async def debug_message(message):
+    """Діагностична функція для логування всіх повідомлень"""
+    logger.info(f"📨 Повідомлення: '{message.text}' від {message.from_user.username} в чаті {message.chat.id} (тип: {message.chat.type})")
+    logger.info(f"🔍 Очікуваний GROUP_ID: {GROUP_ID}")
+    logger.info(f"✅ Співпадає: {message.chat.id == GROUP_ID}")
+
 async def main():
     """Головна функція запуску бота"""
     try:
@@ -32,14 +38,22 @@ async def main():
         
         dp = Dispatcher()
         
-        # Підключення middleware
-        dp.message.middleware(AuthMiddleware())
-        dp.callback_query.middleware(AuthMiddleware())
+        # ДІАГНОСТИКА: Додаємо логування всіх повідомлень
+        @dp.message()
+        async def log_all_messages(message):
+            await debug_message(message)
         
-        # Підключення handlers (ВАЖЛИВО: group роутер має бути першим!)
+        # Підключення handlers в правильному порядку
         dp.include_router(group.router)  # Групові команди обробляються першими
+        
+        # Middleware тільки для не-групових повідомлень
         dp.include_router(admin.router)
-        dp.include_router(schedule.router)  # Приватні команди обробляються після групових
+        admin.router.message.middleware(AuthMiddleware())
+        admin.router.callback_query.middleware(AuthMiddleware())
+        
+        dp.include_router(schedule.router)
+        schedule.router.message.middleware(AuthMiddleware())
+        schedule.router.callback_query.middleware(AuthMiddleware())
         
         # Підключення до бази даних
         await db.connect()
@@ -50,8 +64,8 @@ async def main():
         await scheduler.start()
         logger.info("Планувальник повідомлень запущено")
         
-        # Запуск бота
-        logger.info("Бот запущено!")
+        logger.info(f"🔧 Налаштований GROUP_ID: {GROUP_ID}")
+        logger.info("🤖 Бот запущено з діагностикою!")
         await dp.start_polling(bot)
         
     except Exception as e:
@@ -59,6 +73,8 @@ async def main():
     finally:
         # Відключення від бази даних
         await db.disconnect()
+        if 'scheduler' in locals():
+            await scheduler.stop()
         logger.info("Бот зупинено")
 
 if __name__ == "__main__":

@@ -10,7 +10,11 @@ router = Router()
 
 @router.message(Command("start"))
 async def cmd_start(message: Message, is_admin: bool):
-    """Обробка команди /start"""
+    """Обробка команди /start (тільки в приватних повідомленнях)"""
+    # ВИПРАВЛЕННЯ: Додаємо фільтр щоб не спрацьовувало в групі
+    if message.chat.id == GROUP_ID:
+        return
+        
     welcome_text = "👋 Привіт! Я бот-помічник для твоєї групи.\n\n"
     
     if is_admin:
@@ -25,6 +29,7 @@ async def cmd_start(message: Message, is_admin: bool):
     
     await message.answer(welcome_text, reply_markup=get_main_keyboard())
 
+# ВИПРАВЛЕННЯ: Обмежуємо /help тільки приватними повідомленнями
 @router.message(Command("help"), ~F.chat.id.in_({GROUP_ID}))
 async def cmd_help(message: Message):
     """Обробка команди /help в приватних повідомленнях"""
@@ -49,33 +54,34 @@ async def cmd_help(message: Message):
     
     await message.answer(help_text)
 
-@router.message(F.text == "📅 Розклад на сьогодні")
+# Всі наступні команди тільки для приватних повідомлень
+@router.message(F.text == "📅 Розклад на сьогодні", ~F.chat.id.in_({GROUP_ID}))
 async def get_today_schedule(message: Message):
-    """Розклад на сьогодні"""
+    """Розклад на сьогодні (тільки приватні повідомлення)"""
     schedule = await ScheduleAPI.get_today_schedule()
     await message.answer(schedule)
 
-@router.message(F.text == "📅 Розклад на завтра")  
+@router.message(F.text == "📅 Розклад на завтра", ~F.chat.id.in_({GROUP_ID}))  
 async def get_tomorrow_schedule(message: Message):
-    """Розклад на завтра"""
+    """Розклад на завтра (тільки приватні повідомлення)"""
     schedule = await ScheduleAPI.get_tomorrow_schedule()
     await message.answer(schedule)
 
-@router.message(F.text == "📄 Поточний тиждень")
+@router.message(F.text == "📄 Поточний тиждень", ~F.chat.id.in_({GROUP_ID}))
 async def get_current_week_schedule(message: Message):
-    """Розклад на поточний тиждень"""
+    """Розклад на поточний тиждень (тільки приватні повідомлення)"""
     schedule = await ScheduleAPI.get_week_schedule(0)
     await message.answer(schedule)
 
-@router.message(F.text == "📄 Наступний тиждень")
+@router.message(F.text == "📄 Наступний тиждень", ~F.chat.id.in_({GROUP_ID}))
 async def get_next_week_schedule(message: Message):
-    """Розклад на наступний тиждень"""
+    """Розклад на наступний тиждень (тільки приватні повідомлення)"""
     schedule = await ScheduleAPI.get_week_schedule(1)
     await message.answer(schedule)
 
-@router.message(F.text == "🔗 Посилання на пари")
+@router.message(F.text == "🔗 Посилання на пари", ~F.chat.id.in_({GROUP_ID}))
 async def get_all_links(message: Message):
-    """Отримання всіх посилань на пари"""
+    """Отримання всіх посилань на пари (тільки приватні повідомлення)"""
     links = await LinksManager.get_all_links()
     
     if not links:
