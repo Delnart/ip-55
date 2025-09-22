@@ -5,10 +5,10 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from database.connection import db
+from bot.handlers import admin, schedule, group
 from bot.middlewares.auth import AuthMiddleware
 from bot.utils.scheduler import NotificationScheduler
 from config import BOT_TOKEN, GROUP_ID
-from bot.handlers import admin, schedule, group, homework_admin, homework_student
 
 # Виправлення кодування для Windows
 if sys.platform == 'win32':
@@ -55,20 +55,12 @@ async def main():
         dp = Dispatcher()
         
         # Підключення handlers в правильному порядку
-        dp.include_router(group.router)
+        dp.include_router(group.router)  # Групові команди обробляються першими
         
+        # Middleware тільки для не-групових повідомлень
         dp.include_router(admin.router)
         admin.router.message.middleware(AuthMiddleware())
         admin.router.callback_query.middleware(AuthMiddleware())
-        
-        # ДОДАТИ ЦІ ДВА РОУТЕРИ:
-        dp.include_router(homework_admin.router)
-        homework_admin.router.message.middleware(AuthMiddleware())
-        homework_admin.router.callback_query.middleware(AuthMiddleware())
-        
-        dp.include_router(homework_student.router)
-        homework_student.router.message.middleware(AuthMiddleware())
-        homework_student.router.callback_query.middleware(AuthMiddleware())
         
         dp.include_router(schedule.router)
         schedule.router.message.middleware(AuthMiddleware())

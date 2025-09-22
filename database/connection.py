@@ -29,24 +29,15 @@ class Database:
     async def create_indexes(self):
         """Створення індексів для оптимізації"""
         try:
-            # Існуючі індекси...
+            # Індекс для колекції посилань
             await self.db.links.create_index([
                 ("subject_name", 1),
                 ("teacher_name", 1),
                 ("class_type", 1)
             ], unique=True)
             
+            # Індекс для колекції учасників групи
             await self.db.group_members.create_index("user_id", unique=True)
-            
-            # ДОДАТИ ЦІ ІНДЕКСИ:
-            # Індекси для домашніх завдань
-            await self.db.homework.create_index("deadline")
-            await self.db.homework.create_index("is_active")
-            await self.db.homework.create_index("submissions.user_id")
-            
-            # Індекси для файлів
-            await self.db.files.create_index("homework_id")
-            await self.db.files.create_index("user_id")
             
             logger.info("Індекси створено успішно")
             
