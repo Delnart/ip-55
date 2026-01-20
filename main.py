@@ -65,10 +65,11 @@ async def main():
         
         dp = Dispatcher()
         
-        dp.include_router(group.router)  
         dp.include_router(admin.router)
         admin.router.message.middleware(AuthMiddleware())
         admin.router.callback_query.middleware(AuthMiddleware())
+        
+        dp.include_router(group.router)  
         
         dp.include_router(schedule.router)
         schedule.router.message.middleware(AuthMiddleware())
