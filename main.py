@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import sys
+import os
+from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -40,9 +42,22 @@ async def debug_message(message):
     print(f"Тип чату: {message.chat.type}")
     print("===================\n")
 
+async def handle(request):
+    return web.Response(text="Bot is running!")
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get('/', handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    logging.info(f"Web server started on port {port}")
+
 async def main():
     """Головна функція запуску бота"""
     try:
+        await start_web_server()
         bot = Bot(
             token=BOT_TOKEN,
             default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN)
@@ -51,7 +66,6 @@ async def main():
         dp = Dispatcher()
         
         dp.include_router(group.router)  
-        
         dp.include_router(admin.router)
         admin.router.message.middleware(AuthMiddleware())
         admin.router.callback_query.middleware(AuthMiddleware())
