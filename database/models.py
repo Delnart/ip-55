@@ -248,3 +248,13 @@ class GroupMembersManager:
         except Exception as e:
             logger.error(f"Помилка видалення учасника: {e}")
             return False
+    @staticmethod
+    async def get_muted_members() -> List[Dict[str, Any]]:
+        """Отримання списку учасників з вимкненим пінгом"""
+        try:
+            cursor = db.db.group_members.find({"allow_ping": False, "is_active": True})
+            members = await cursor.to_list(length=None)
+            return members
+        except Exception as e:
+            logger.error(f"Помилка отримання muted учасників: {e}")
+            return []

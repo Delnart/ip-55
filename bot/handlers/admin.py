@@ -514,3 +514,29 @@ async def unmute_ping_command(message: Message, is_admin: bool):
         await GroupMembersManager.set_ping_status(target_user.id, True)
         name = f"@{target_user.username}" if target_user.username else target_user.first_name
         await message.answer(f"🔔 Користувача {name} повернуто до списку для тегу `/all`.")
+
+@router.message(Command("muted", "muted_list"))
+async def show_muted_list(message: Message, is_admin: bool):
+    """Показати список користувачів, виключених з пінгу"""
+    if not is_admin:
+        await message.answer("❌ Ця команда доступна тільки адміністратору.")
+        return
+
+    muted_members = await GroupMembersManager.get_muted_members()
+
+    if not muted_members:
+        await message.answer("🔕 Список виключень порожній. Всі учасники отримують пінг.")
+        return
+
+    response = f"🔕 **Список користувачів з вимкненим пінгом ({len(muted_members)}):**\n\n"
+
+    for i, member in enumerate(muted_members, 1):
+        first_name = member.get('first_name', 'Без імені')
+        username = member.get('username')
+        user_id = member.get('user_id')
+        
+        user_label = f"@{username}" if username else first_name
+        
+        response += f"{i}. **{user_label}** (ID: `{user_id}`)\n"
+
+    await message.answer(response, parse_mode="Markdown")
