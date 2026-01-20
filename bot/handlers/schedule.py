@@ -5,7 +5,7 @@ from bot.utils.api import ScheduleAPI
 from bot.keyboards.user import get_schedule_inline_keyboard, get_main_keyboard
 from database.models import LinksManager
 from config import GROUP_ID
-
+from database.models import LinksManager, SettingsManager
 router = Router()
 
 @router.message(Command("start"))

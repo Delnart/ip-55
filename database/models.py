@@ -127,7 +127,34 @@ class LinksManager:
         except Exception as e:
             logger.error(f"Помилка пошуку посилань: {e}")
             return []
+        
+class SettingsManager:
+    """Клас для керування глобальними налаштуваннями бота"""
+    
+    @staticmethod
+    async def get_setting(key: str, default: Any = None) -> Any:
+        """Отримання значення налаштування"""
+        try:
+            doc = await db.db.settings.find_one({"key": key})
+            return doc["value"] if doc else default
+        except Exception as e:
+            logger.error(f"Помилка отримання налаштування {key}: {e}")
+            return default
 
+    @staticmethod
+    async def set_setting(key: str, value: Any) -> bool:
+        """Встановлення значення налаштування"""
+        try:
+            await db.db.settings.update_one(
+                {"key": key},
+                {"$set": {"value": value}},
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Помилка збереження налаштування {key}: {e}")
+            return False
+        
 class GroupMembersManager:
     """Клас для роботи з учасниками групи"""
     
@@ -181,7 +208,29 @@ class GroupMembersManager:
         except Exception as e:
             logger.error(f"Помилка отримання учасників: {e}")
             return []
-    
+    @staticmethod
+    async def set_ping_status(user_id: int, allow_ping: bool) -> bool:
+        """Встановлення дозволу на пінг для учасника"""
+        try:
+            result = await db.db.group_members.update_one(
+                {"user_id": user_id},
+                {"$set": {"allow_ping": allow_ping}}
+            )
+            return result.modified_count > 0 or result.matched_count > 0
+        except Exception as e:
+            logger.error(f"Помилка зміни статусу пінгу: {e}")
+            return False
+    @staticmethod
+    async def get_member_by_username(username: str) -> Optional[Dict[str, Any]]:
+        """Пошук учасника за username (без @)"""
+        try:
+            return await db.db.group_members.find_one({
+                "username": {"$regex": f"^{username}$", "$options": "i"},
+                "is_active": True
+            })
+        except Exception as e:
+            logger.error(f"Помилка пошуку учасника: {e}")
+            return None
     @staticmethod
     async def remove_member(user_id: int) -> bool:
         """Видалення учасника (позначення як неактивний)"""

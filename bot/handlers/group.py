@@ -199,6 +199,8 @@ async def tag_all_command(message: Message, bot: Bot):
     for member in members:
         user_id = member.get('user_id')
         
+        if not member.get('allow_ping', True):
+            continue
         if user_id == bot.id or user_id == message.from_user.id:
             continue
 

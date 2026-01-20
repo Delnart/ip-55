@@ -5,7 +5,7 @@ from typing import Optional
 import pytz
 from aiogram import Bot
 from bot.utils.api import ScheduleAPI, get_class_end_time 
-from database.models import LinksManager
+from database.models import LinksManager, SettingsManager
 from config import GROUP_ID, NOTIFICATION_MINUTES_BEFORE, TIMEZONE
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,9 @@ class NotificationScheduler:
     async def _check_upcoming_classes(self):
         """Перевірка майбутніх пар та надсилання сповіщень"""
         try:
+            notifications_enabled = await SettingsManager.get_setting("notifications_enabled", True)
+            if not notifications_enabled:
+                return
             schedule_data = await ScheduleAPI.get_schedule()
             if not schedule_data:
                 return

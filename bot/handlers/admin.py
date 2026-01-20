@@ -3,13 +3,14 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from database.models import LinksManager, GroupMembersManager
+from database.models import LinksManager, GroupMembersManager, SettingsManager
 from bot.keyboards.admin import (
     get_admin_keyboard, 
     get_link_type_keyboard, 
     get_cancel_keyboard,
     get_confirm_delete_keyboard
 )
+
 from bot.keyboards.user import get_main_keyboard
 from config import NOTIFICATION_MINUTES_BEFORE, TIMEZONE, GROUP_ID
 import logging
@@ -414,3 +415,102 @@ async def cancel_operation(callback: CallbackQuery, state: FSMContext):
         reply_markup=None
     )
     await callback.answer("Операцію скасовано")
+
+
+
+
+@router.message(Command("notifications"))
+async def toggle_notifications_command(message: Message, is_admin: bool):
+    """Увімкнення/вимкнення автоматичних сповіщень про пари"""
+    if not is_admin:
+        await message.answer("❌ Ця команда доступна тільки адміністратору.")
+        return
+
+    args = message.text.split()
+    
+    if len(args) > 1:
+        action = args[1].lower()
+        if action in ['on', 'enable', '1', 'вкл']:
+            new_state = True
+        elif action in ['off', 'disable', '0', 'викл']:
+            new_state = False
+        else:
+            await message.answer("ℹ️ Використання: /notifications [on/off]")
+            return
+    else:
+        current_state = await SettingsManager.get_setting("notifications_enabled", True)
+        new_state = not current_state
+
+    await SettingsManager.set_setting("notifications_enabled", new_state)
+    
+    status_text = "✅ **УВІМКНЕНО**" if new_state else "🔕 **ВИМКНЕНО**"
+    await message.answer(f"Сповіщення про пари (за 10 хв) тепер: {status_text}", parse_mode="Markdown")
+
+
+@router.message(Command("mute_ping"))
+async def mute_ping_command(message: Message, is_admin: bool):
+    """Додати виключення для пінгу (@all)"""
+    if not is_admin:
+        await message.answer("❌ Ця команда доступна тільки адміністратору.")
+        return
+
+    target_user = None
+
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
+    
+    else:
+        args = message.text.split()
+        if len(args) < 2:
+            await message.answer(
+                "ℹ️ **Як використовувати:**\n"
+                "1. Відповісти на повідомлення користувача командою `/mute_ping`\n"
+                "2. Написати `/mute_ping @username`"
+            )
+            return
+        
+        username = args[1].replace("@", "")
+        member_data = await GroupMembersManager.get_member_by_username(username)
+        
+        if not member_data:
+            await message.answer(f"❌ Користувача @{username} не знайдено в базі даних бота.")
+            return
+            
+        from collections import namedtuple
+        User = namedtuple('User', ['id', 'username', 'first_name'])
+        target_user = User(id=member_data['user_id'], username=member_data['username'], first_name=member_data['first_name'])
+
+    if target_user:
+        await GroupMembersManager.set_ping_status(target_user.id, False)
+        name = f"@{target_user.username}" if target_user.username else target_user.first_name
+        await message.answer(f"🔕 Користувача {name} виключено зі списку для тегу `/all`.")
+
+
+@router.message(Command("unmute_ping"))
+async def unmute_ping_command(message: Message, is_admin: bool):
+    """Прибрати виключення для пінгу"""
+    if not is_admin:
+        await message.answer("❌ Тільки для адмінів.")
+        return
+
+    target_user = None
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
+    else:
+        args = message.text.split()
+        if len(args) < 2:
+            await message.answer("ℹ️ Використання: `/unmute_ping @username` або реплаєм.")
+            return
+        username = args[1].replace("@", "")
+        member_data = await GroupMembersManager.get_member_by_username(username)
+        if not member_data:
+            await message.answer("❌ Користувача не знайдено.")
+            return
+        from collections import namedtuple
+        User = namedtuple('User', ['id', 'username', 'first_name'])
+        target_user = User(id=member_data['user_id'], username=member_data['username'], first_name=member_data['first_name'])
+
+    if target_user:
+        await GroupMembersManager.set_ping_status(target_user.id, True)
+        name = f"@{target_user.username}" if target_user.username else target_user.first_name
+        await message.answer(f"🔔 Користувача {name} повернуто до списку для тегу `/all`.")
