@@ -2,7 +2,7 @@ from aiogram import Router, F
 from aiogram.types import Message, ChatMemberUpdated, CallbackQuery
 from aiogram.filters import ChatMemberUpdatedFilter, KICKED, LEFT, MEMBER, ADMINISTRATOR, CREATOR, Command
 from database.models import GroupMembersManager, LinksManager
-from config import GROUP_ID, ADMIN_ID, TIMEZONE
+from config import GROUP_ID, ADMIN_IDS, TIMEZONE
 import logging
 from datetime import datetime
 import pytz
@@ -198,7 +198,7 @@ async def tag_all_command(message: Message, bot: Bot):
     
     for member in members:
         user_id = member.get('user_id')
-        
+
         if not member.get('allow_ping', True):
             continue
         if user_id == bot.id or user_id == message.from_user.id:
@@ -320,7 +320,7 @@ async def handle_group_messages(message: Message):
     if not user:
         return
     
-    if user.id == ADMIN_ID:
+    if user.id in ADMIN_IDS:
         is_member = await GroupMembersManager.is_member(user.id)
         if not is_member:
             await GroupMembersManager.add_member(

@@ -2,7 +2,7 @@ from typing import Callable, Dict, Any, Awaitable
 from aiogram import BaseMiddleware
 from aiogram.types import Message, CallbackQuery
 from database.models import GroupMembersManager
-from config import ADMIN_ID, GROUP_ID
+from config import ADMIN_IDS, GROUP_ID
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ class AuthMiddleware(BaseMiddleware):
             is_group_message = event.message.chat.id == GROUP_ID
         
         if is_group_message:
-            if user.id == ADMIN_ID:
+            if user.id in ADMIN_IDS:
                 data['is_admin'] = True
                 data['is_group_member'] = True
             else:
@@ -51,7 +51,7 @@ class AuthMiddleware(BaseMiddleware):
             
             return await handler(event, data)
         
-        if user.id == ADMIN_ID:
+        if user.id in ADMIN_IDS:
             data['is_admin'] = True
             data['is_group_member'] = True
             return await handler(event, data)

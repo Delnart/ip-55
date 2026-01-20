@@ -7,7 +7,8 @@ load_dotenv()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 
 GROUP_ID = int(os.getenv('GROUP_ID', '-4956301173'))
-ADMIN_ID = int(os.getenv('ADMIN_ID'))
+admin_env = os.getenv('ADMIN_ID', '')
+ADMIN_IDS = [int(id_str.strip()) for id_str in admin_env.split(',') if id_str.strip()]
 
 MONGODB_URL = os.getenv('MONGODB_URL', 'mongodb://localhost:27017/university_bot')
 
