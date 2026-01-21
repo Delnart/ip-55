@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 
-const API_URL = 'https://your-backend-url.com/api';
+const API_URL = '/api';
 
 const api = axios.create({
   baseURL: API_URL,
