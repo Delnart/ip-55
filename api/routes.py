@@ -1,25 +1,15 @@
-from fastapi import FastAPI, HTTPException, Depends
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
-from motor.motor_asyncio import AsyncIOMotorClient
-from config import MONGODB_URL, ADMIN_IDS
-import os
+from database.connection import db
+from config import ADMIN_IDS
+from bot.utils.api import ScheduleAPI
 
-app = FastAPI()
+# ВАЖЛИВО: Використовуємо APIRouter замість FastAPI
+router = APIRouter()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-client = AsyncIOMotorClient(MONGODB_URL)
-db = client.university_bot
-
+# --- Моделі даних ---
 class User(BaseModel):
     telegramId: int
     fullName: Optional[str] = None
@@ -59,10 +49,19 @@ class Homework(BaseModel):
 async def is_admin(telegram_id: int) -> bool:
     return telegram_id in ADMIN_IDS
 
-@app.post("/users/update")
+# --- Ендпоінти ---
+
+@router.get("/schedule")
+async def get_schedule():
+    schedule = await ScheduleAPI.get_schedule()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    return schedule
+
+@router.post("/users/update")
 async def update_user(user: User):
     try:
-        await db.users.update_one(
+        await db.db.users.update_one(
             {"telegramId": user.telegramId},
             {"$set": {
                 "fullName": user.fullName,
@@ -75,18 +74,18 @@ async def update_user(user: User):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/users/{telegram_id}")
+@router.get("/users/{telegram_id}")
 async def get_user(telegram_id: int):
-    user = await db.users.find_one({"telegramId": telegram_id})
+    user = await db.db.users.find_one({"telegramId": telegram_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     user["_id"] = str(user["_id"])
     return user
 
-@app.post("/subjects")
+@router.post("/subjects")
 async def create_subject(subject: Subject):
     try:
-        result = await db.subjects.insert_one({
+        result = await db.db.subjects.insert_one({
             "name": subject.name,
             "type": subject.type,
             "createdAt": datetime.utcnow()
@@ -95,18 +94,18 @@ async def create_subject(subject: Subject):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/subjects")
+@router.get("/subjects")
 async def get_subjects():
-    subjects = await db.subjects.find().to_list(1000)
+    subjects = await db.db.subjects.find().to_list(1000)
     for s in subjects:
         s["_id"] = str(s["_id"])
     return subjects
 
-@app.post("/queues")
+@router.post("/queues")
 async def create_queue(data: dict):
     try:
         subject_id = data.get("subjectId")
-        existing = await db.queues.find_one({"subjectId": subject_id})
+        existing = await db.db.queues.find_one({"subjectId": subject_id})
         if existing:
             return {"success": True, "queue": {
                 "_id": str(existing["_id"]),
@@ -116,7 +115,7 @@ async def create_queue(data: dict):
                 "config": existing.get("config", {})
             }}
         
-        result = await db.queues.insert_one({
+        result = await db.db.queues.insert_one({
             "subjectId": subject_id,
             "isActive": True,
             "entries": [],
@@ -132,9 +131,9 @@ async def create_queue(data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/queues/subject/{subject_id}")
+@router.get("/queues/subject/{subject_id}")
 async def get_queue_by_subject(subject_id: str):
-    queue = await db.queues.find_one({"subjectId": subject_id})
+    queue = await db.db.queues.find_one({"subjectId": subject_id})
     if not queue:
         return None
     
@@ -142,7 +141,7 @@ async def get_queue_by_subject(subject_id: str):
     
     for entry in queue.get("entries", []):
         if entry.get("userId"):
-            user = await db.users.find_one({"_id": entry["userId"]})
+            user = await db.db.users.find_one({"_id": entry["userId"]})
             if user:
                 entry["user"] = {
                     "_id": str(user["_id"]),
@@ -153,17 +152,17 @@ async def get_queue_by_subject(subject_id: str):
     
     return queue
 
-@app.post("/queues/join")
+@router.post("/queues/join")
 async def join_queue(entry: QueueEntry):
     try:
-        queue = await db.queues.find_one({"_id": entry.queueId})
+        queue = await db.db.queues.find_one({"_id": entry.queueId})
         if not queue:
             raise HTTPException(status_code=404, detail="Queue not found")
         
         if not queue.get("isActive", True):
             raise HTTPException(status_code=400, detail="Queue is closed")
         
-        user = await db.users.find_one({"telegramId": entry.telegramId})
+        user = await db.db.users.find_one({"telegramId": entry.telegramId})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -191,7 +190,7 @@ async def join_queue(entry: QueueEntry):
         
         entries.append(new_entry)
         
-        await db.queues.update_one(
+        await db.db.queues.update_one(
             {"_id": entry.queueId},
             {"$set": {"entries": entries}}
         )
@@ -202,26 +201,26 @@ async def join_queue(entry: QueueEntry):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/queues/leave")
+@router.post("/queues/leave")
 async def leave_queue(data: dict):
     try:
         queue_id = data.get("queueId")
         telegram_id = data.get("telegramId")
         
-        user = await db.users.find_one({"telegramId": telegram_id})
+        user = await db.db.users.find_one({"telegramId": telegram_id})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
         user_id = str(user["_id"])
         
-        queue = await db.queues.find_one({"_id": queue_id})
+        queue = await db.db.queues.find_one({"_id": queue_id})
         if not queue:
             raise HTTPException(status_code=404, detail="Queue not found")
         
         entries = queue.get("entries", [])
         entries = [e for e in entries if e.get("userId") != user_id]
         
-        await db.queues.update_one(
+        await db.db.queues.update_one(
             {"_id": queue_id},
             {"$set": {"entries": entries}}
         )
@@ -230,7 +229,7 @@ async def leave_queue(data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/queues/kick")
+@router.post("/queues/kick")
 async def kick_from_queue(data: dict):
     try:
         queue_id = data.get("queueId")
@@ -240,14 +239,14 @@ async def kick_from_queue(data: dict):
         if not await is_admin(admin_tg_id):
             raise HTTPException(status_code=403, detail="Not authorized")
         
-        queue = await db.queues.find_one({"_id": queue_id})
+        queue = await db.db.queues.find_one({"_id": queue_id})
         if not queue:
             raise HTTPException(status_code=404, detail="Queue not found")
         
         entries = queue.get("entries", [])
         entries = [e for e in entries if e.get("userId") != target_user_id]
         
-        await db.queues.update_one(
+        await db.db.queues.update_one(
             {"_id": queue_id},
             {"$set": {"entries": entries}}
         )
@@ -256,18 +255,18 @@ async def kick_from_queue(data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/queues/toggle")
+@router.post("/queues/toggle")
 async def toggle_queue(data: dict):
     try:
         queue_id = data.get("queueId")
         
-        queue = await db.queues.find_one({"_id": queue_id})
+        queue = await db.db.queues.find_one({"_id": queue_id})
         if not queue:
             raise HTTPException(status_code=404, detail="Queue not found")
         
         new_state = not queue.get("isActive", True)
         
-        await db.queues.update_one(
+        await db.db.queues.update_one(
             {"_id": queue_id},
             {"$set": {"isActive": new_state}}
         )
@@ -276,10 +275,10 @@ async def toggle_queue(data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.patch("/queues/status")
+@router.patch("/queues/status")
 async def update_queue_status(update: QueueUpdate):
     try:
-        queue = await db.queues.find_one({"_id": update.queueId})
+        queue = await db.db.queues.find_one({"_id": update.queueId})
         if not queue:
             raise HTTPException(status_code=404, detail="Queue not found")
         
@@ -290,7 +289,7 @@ async def update_queue_status(update: QueueUpdate):
                 entry["status"] = update.status
                 break
         
-        await db.queues.update_one(
+        await db.db.queues.update_one(
             {"_id": update.queueId},
             {"$set": {"entries": entries}}
         )
@@ -299,13 +298,13 @@ async def update_queue_status(update: QueueUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/topics")
+@router.post("/topics")
 async def create_topics_list(data: dict):
     try:
         subject_id = data.get("subjectId")
         max_topics = data.get("maxTopics", 30)
         
-        result = await db.topics.insert_one({
+        result = await db.db.topics.insert_one({
             "subjectId": subject_id,
             "maxTopics": max_topics,
             "entries": [],
@@ -316,9 +315,9 @@ async def create_topics_list(data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/topics/subject/{subject_id}")
+@router.get("/topics/subject/{subject_id}")
 async def get_topics_by_subject(subject_id: str):
-    topics = await db.topics.find_one({"subjectId": subject_id})
+    topics = await db.db.topics.find_one({"subjectId": subject_id})
     if not topics:
         return None
     
@@ -326,7 +325,7 @@ async def get_topics_by_subject(subject_id: str):
     
     for entry in topics.get("entries", []):
         if entry.get("userId"):
-            user = await db.users.find_one({"_id": entry["userId"]})
+            user = await db.db.users.find_one({"_id": entry["userId"]})
             if user:
                 entry["user"] = {
                     "_id": str(user["_id"]),
@@ -336,14 +335,14 @@ async def get_topics_by_subject(subject_id: str):
     
     return topics
 
-@app.post("/topics/claim")
+@router.post("/topics/claim")
 async def claim_topic(entry: TopicEntry):
     try:
-        topics = await db.topics.find_one({"_id": entry.subjectId})
+        topics = await db.db.topics.find_one({"_id": entry.subjectId})
         if not topics:
             raise HTTPException(status_code=404, detail="Topics list not found")
         
-        user = await db.users.find_one({"telegramId": entry.telegramId})
+        user = await db.db.users.find_one({"telegramId": entry.telegramId})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -362,7 +361,7 @@ async def claim_topic(entry: TopicEntry):
         
         entries.append(new_entry)
         
-        await db.topics.update_one(
+        await db.db.topics.update_one(
             {"_id": entry.subjectId},
             {"$set": {"entries": entries}}
         )
@@ -371,10 +370,10 @@ async def claim_topic(entry: TopicEntry):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/homework")
+@router.post("/homework")
 async def add_homework(hw: Homework):
     try:
-        result = await db.homework.insert_one({
+        result = await db.db.homework.insert_one({
             "subject": hw.subject,
             "description": hw.description,
             "deadline": hw.deadline,
@@ -384,31 +383,31 @@ async def add_homework(hw: Homework):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/homework")
+@router.get("/homework")
 async def get_homework():
-    homework = await db.homework.find().sort("createdAt", -1).to_list(100)
+    homework = await db.db.homework.find().sort("createdAt", -1).to_list(100)
     for hw in homework:
         hw["_id"] = str(hw["_id"])
     return homework
 
-@app.delete("/homework/{hw_id}")
+@router.delete("/homework/{hw_id}")
 async def delete_homework(hw_id: str, telegram_id: int):
     try:
         if not await is_admin(telegram_id):
             raise HTTPException(status_code=403, detail="Not authorized")
         
-        await db.homework.delete_one({"_id": hw_id})
+        await db.db.homework.delete_one({"_id": hw_id})
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.patch("/homework/{hw_id}")
+@router.patch("/homework/{hw_id}")
 async def update_homework(hw_id: str, hw: Homework, telegram_id: int):
     try:
         if not await is_admin(telegram_id):
             raise HTTPException(status_code=403, detail="Not authorized")
         
-        await db.homework.update_one(
+        await db.db.homework.update_one(
             {"_id": hw_id},
             {"$set": {
                 "subject": hw.subject,
@@ -421,10 +420,10 @@ async def update_homework(hw_id: str, hw: Homework, telegram_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/queues/{queue_id}/config")
+@router.get("/queues/{queue_id}/config")
 async def get_queue_config(queue_id: str):
     try:
-        queue = await db.queues.find_one({"_id": queue_id})
+        queue = await db.db.queues.find_one({"_id": queue_id})
         if not queue:
             raise HTTPException(status_code=404, detail="Queue not found")
         
@@ -437,10 +436,10 @@ async def get_queue_config(queue_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.patch("/queues/{queue_id}/config")
+@router.patch("/queues/{queue_id}/config")
 async def update_queue_config(queue_id: str, config: QueueConfig):
     try:
-        await db.queues.update_one(
+        await db.db.queues.update_one(
             {"_id": queue_id},
             {"$set": {"config": config.dict()}}
         )
@@ -448,18 +447,18 @@ async def update_queue_config(queue_id: str, config: QueueConfig):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/topics/release")
+@router.post("/topics/release")
 async def release_topic(data: dict):
     try:
         subject_id = data.get("subjectId")
         telegram_id = data.get("telegramId")
         topic_number = data.get("topicNumber")
         
-        topics = await db.topics.find_one({"_id": subject_id})
+        topics = await db.db.topics.find_one({"_id": subject_id})
         if not topics:
             raise HTTPException(status_code=404, detail="Topics list not found")
         
-        user = await db.users.find_one({"telegramId": telegram_id})
+        user = await db.db.users.find_one({"telegramId": telegram_id})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -468,7 +467,7 @@ async def release_topic(data: dict):
         
         entries = [e for e in entries if not (e.get("userId") == user_id and e.get("topicNumber") == topic_number)]
         
-        await db.topics.update_one(
+        await db.db.topics.update_one(
             {"_id": subject_id},
             {"$set": {"entries": entries}}
         )
@@ -477,14 +476,14 @@ async def release_topic(data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/queues/move")
+@router.post("/queues/move")
 async def move_in_queue(data: dict):
     try:
         queue_id = data.get("queueId")
         user_id = data.get("userId")
         new_position = data.get("newPosition")
         
-        queue = await db.queues.find_one({"_id": queue_id})
+        queue = await db.db.queues.find_one({"_id": queue_id})
         if not queue:
             raise HTTPException(status_code=404, detail="Queue not found")
         
@@ -503,7 +502,7 @@ async def move_in_queue(data: dict):
         
         user_entry["position"] = new_position
         
-        await db.queues.update_one(
+        await db.db.queues.update_one(
             {"_id": queue_id},
             {"$set": {"entries": entries}}
         )
@@ -511,8 +510,3 @@ async def move_in_queue(data: dict):
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
