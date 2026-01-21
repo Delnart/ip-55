@@ -268,6 +268,26 @@ class Models:
     @staticmethod
     async def get_subject_links(subject_name: str) -> List[Dict]:
         return await db.db.links.find({"subject_name": subject_name}).to_list(length=None)
+class UsersManager:
+    @staticmethod
+    async def get_all_users():
+        """Отримати всіх користувачів для вибору адміном"""
+        users = await db.db.users.find({}).to_list(length=None)
+        for u in users: u["_id"] = str(u["_id"])
+        return users
+
+class SubjectsManager:
+    @staticmethod
+    async def update_subject(id: str, data: dict):
+        await db.db.subjects.update_one(
+            {"_id": ObjectId(id)},
+            {"$set": {
+                "name": data["name"], 
+                "teacherLecture": data.get("teacherLecture"),
+                "teacherPractice": data.get("teacherPractice"),
+                "note": data.get("note")
+            }}
+        )
 
 class HomeworkManager:
     @staticmethod
@@ -279,6 +299,13 @@ class HomeworkManager:
             "authorId": author_id,
             "createdAt": datetime.utcnow()
         })
+
+    @staticmethod
+    async def update_hw(hw_id: str, text: str, deadline: str):
+        await db.db.homework.update_one(
+            {"_id": ObjectId(hw_id)},
+            {"$set": {"text": text, "deadline": deadline}}
+        )
 
     @staticmethod
     async def get_hw(subject_id: str):
@@ -302,17 +329,39 @@ class TopicsManager:
         await db.db.topics.insert_one({
             "subjectId": subject_id,
             "title": title,
-            "userId": None,
-            "userName": None
+            "users": [] # Список тих, хто взяв
         })
+    
+    @staticmethod
+    async def update_topic(topic_id: str, title: str):
+        await db.db.topics.update_one(
+            {"_id": ObjectId(topic_id)},
+            {"$set": {"title": title}}
+        )
+
+    @staticmethod
+    async def delete_topic(topic_id: str):
+        await db.db.topics.delete_one({"_id": ObjectId(topic_id)})
 
     @staticmethod
     async def toggle_topic(topic_id: str, user_id: str, user_name: str):
+        """Логіка: одна людина може взяти декілька тем. Одна тема може бути взята декількома людьми."""
         topic = await db.db.topics.find_one({"_id": ObjectId(topic_id)})
-        if topic.get("userId") == user_id:
-            await db.db.topics.update_one({"_id": ObjectId(topic_id)}, {"$set": {"userId": None, "userName": None}})
+        if not topic: return False
+        
+        users = topic.get("users", [])
+        
+        # Перевіряємо чи юзер вже взяв цю тему
+        existing_user = next((u for u in users if u["userId"] == user_id), None)
+        
+        if existing_user:
+            # Якщо взяв - видаляємо (toggle off)
+            new_users = [u for u in users if u["userId"] != user_id]
+            await db.db.topics.update_one({"_id": ObjectId(topic_id)}, {"$set": {"users": new_users}})
             return True
-        elif topic.get("userId") is None:
-            await db.db.topics.update_one({"_id": ObjectId(topic_id)}, {"$set": {"userId": user_id, "userName": user_name}})
+        else:
+            # Якщо не взяв - додаємо (toggle on)
+            # Тут НЕМАЄ обмеження, що тему може взяти тільки один. Займають скільки завгодно людей.
+            users.append({"userId": user_id, "userName": user_name})
+            await db.db.topics.update_one({"_id": ObjectId(topic_id)}, {"$set": {"users": users}})
             return True
-        return False
