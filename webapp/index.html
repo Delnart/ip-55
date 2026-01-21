@@ -26,7 +26,7 @@
     
     <script type="text/babel">
         const { useState, useEffect } = React;
-        const API_BASE = 'https://your-backend-url.com/api';
+        const API_BASE = '/api'; // Виправлений шлях
         
         const Icons = {
             Home: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
@@ -40,6 +40,15 @@
             const [tab, setTab] = useState('home');
             const [user, setUser] = useState(null);
             const [subjects, setSubjects] = useState([]);
+            
+            // ЯВНА МАПА ІКОНОК (Виправлення помилки)
+            const tabIcons = {
+                home: Icons.Home,
+                schedule: Icons.Calendar,
+                queues: Icons.Users,
+                topics: Icons.Book,
+                homework: Icons.Clipboard
+            };
             
             useEffect(() => {
                 const tg = window.Telegram?.WebApp;
@@ -77,12 +86,15 @@
                     
                     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-50">
                         <div className="flex justify-around h-16">
-                            {['home', 'schedule', 'queues', 'topics', 'homework'].map(t => (
-                                <button key={t} onClick={() => setTab(t)} className={`flex flex-col items-center justify-center flex-1 ${tab === t ? 'text-blue-600' : 'text-gray-500'}`}>
-                                    {Icons[t.charAt(0).toUpperCase() + t.slice(1).replace('queues', 'Users').replace('topics', 'Book').replace('homework', 'Clipboard')]()}
-                                    <span className="text-xs mt-1">{t === 'home' ? 'Головна' : t === 'schedule' ? 'Розклад' : t === 'queues' ? 'Черги' : t === 'topics' ? 'Теми' : 'Домашка'}</span>
-                                </button>
-                            ))}
+                            {['home', 'schedule', 'queues', 'topics', 'homework'].map(t => {
+                                const IconComponent = tabIcons[t];
+                                return (
+                                    <button key={t} onClick={() => setTab(t)} className={`flex flex-col items-center justify-center flex-1 ${tab === t ? 'text-blue-600' : 'text-gray-500'}`}>
+                                        <IconComponent />
+                                        <span className="text-xs mt-1">{t === 'home' ? 'Головна' : t === 'schedule' ? 'Розклад' : t === 'queues' ? 'Черги' : t === 'topics' ? 'Теми' : 'Домашка'}</span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </nav>
                 </div>
@@ -131,13 +143,25 @@
             const [day, setDay] = useState(null);
             
             useEffect(() => {
-                fetch('https://api.campus.kpi.ua/schedule/lessons?groupId=YOUR_GROUP_ID')
-                    .then(r => r.json())
+                fetch(`${API_BASE}/schedule`) // Використовуємо API_BASE або перевіряємо, чи є такий ендпоінт на вашому бекенді, або залишаємо зовнішній URL якщо треба
+                    .then(r => r.json()) 
                     .then(d => setSchedule(d))
-                    .catch(console.error);
+                    .catch(() => {
+                         // Fallback якщо ендпоінта нема, спробуємо прямий запит до KPI (через бекенд проксі краще)
+                         // Або, якщо у вас в main.py підключений schedule роутер, то краще звертатись туди
+                         // В оригіналі тут був запит на 'https://api.campus.kpi.ua...', це може викликати CORS помилку в браузері.
+                         // Краще зробити ендпоінт в вашому main.py який проксує цей запит.
+                         console.log("Schedule fetch error");
+                    });
             }, []);
             
-            if (!schedule) return <div className="p-4 text-center">Завантаження...</div>;
+            // Тимчасова заглушка для розкладу, поки не налаштований бекенд проксі
+            if (!schedule) return (
+                <div className="p-4 text-center">
+                    <p>Завантаження розкладу...</p>
+                    <button onClick={() => window.open('https://rozklad.kpi.ua/', '_blank')} className="mt-4 text-blue-600 underline">Відкрити rozklad.kpi.ua</button>
+                </div>
+            );
             
             const weekKey = week === 1 ? 'scheduleFirstWeek' : 'scheduleSecondWeek';
             const weekSch = schedule[weekKey] || [];
@@ -208,12 +232,12 @@
                 <div className="p-4">
                     <h1 className="text-2xl font-bold mb-4">Черги</h1>
                     <div className="space-y-3">
-                        {qSubjects.map(s => (
+                        {qSubjects.length > 0 ? qSubjects.map(s => (
                             <button key={s._id} onClick={() => setSelected(s)} className="w-full bg-white rounded-xl shadow-sm p-4 text-left">
                                 <h3 className="font-bold">{s.name}</h3>
                                 <p className="text-sm text-gray-500">Натисніть щоб переглянути</p>
                             </button>
-                        ))}
+                        )) : <p className="text-gray-500">Немає активних черг</p>}
                     </div>
                 </div>
             );
@@ -237,7 +261,15 @@
             }, [subject]);
             
             const join = async (pos) => {
-                if (!labNum) return alert('Введіть номер лаби');
+                if (!labNum && !pos) return alert('Введіть номер лаби'); 
+                // Якщо натиснули на слот (pos), то номер лаби запитаємо prompt-ом або треба форма
+                
+                let labToUse = labNum;
+                if (!labToUse && pos) {
+                     labToUse = prompt("Введіть номер лабораторної:");
+                     if (!labToUse) return;
+                }
+
                 try {
                     await fetch(`${API_BASE}/queues/join`, {
                         method: 'POST',
@@ -245,14 +277,14 @@
                         body: JSON.stringify({
                             queueId: queue._id,
                             telegramId: user.id,
-                            labNumber: parseInt(labNum),
+                            labNumber: parseInt(labToUse),
                             position: pos
                         })
                     });
                     setLabNum('');
                     setJoining(false);
                 } catch(e) {
-                    alert('Помилка');
+                    alert('Помилка при запису');
                 }
             };
             
@@ -289,10 +321,10 @@
                                             <span className="absolute top-1 left-2 text-xs font-bold text-gray-400">#{n}</span>
                                             {e ? (
                                                 <>
-                                                    <div className="w-10 h-10 rounded-full bg-gray-200 mb-1 flex items-center justify-center font-bold">
-                                                        {e.user?.fullName?.charAt(0) || '?'}
+                                                    <div className="w-10 h-10 rounded-full bg-gray-200 mb-1 flex items-center justify-center font-bold overflow-hidden text-xs">
+                                                        {e.user?.fullName?.slice(0, 2) || '?'}
                                                     </div>
-                                                    <span className="text-xs font-bold">{e.user?.fullName || 'Студент'}</span>
+                                                    <span className="text-xs font-bold break-words w-full">{e.user?.fullName || 'Студент'}</span>
                                                     <span className="text-xs bg-white px-2 py-0.5 rounded mt-1">Лаб {e.labNumber}</span>
                                                 </>
                                             ) : (
@@ -315,7 +347,15 @@
                                     <span className="text-xs font-bold text-blue-400">МІСЦЕ</span>
                                     <span className="text-2xl font-black">{myEntry.position}</span>
                                 </div>
-                                <button className="px-6 bg-red-100 text-red-600 rounded-xl font-bold">Вийти</button>
+                                <button onClick={async () => {
+                                    if(confirm("Вийти з черги?")) {
+                                        await fetch(`${API_BASE}/queues/leave`, {
+                                            method: 'POST',
+                                            headers: {'Content-Type': 'application/json'},
+                                            body: JSON.stringify({queueId: queue._id, telegramId: user.id})
+                                        });
+                                    }
+                                }} className="px-6 bg-red-100 text-red-600 rounded-xl font-bold">Вийти</button>
                             </div>
                         ) : joining ? (
                             <div className="flex gap-2">
