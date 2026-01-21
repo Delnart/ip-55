@@ -5,7 +5,7 @@ from config import GROUP_ID
 
 router = Router()
 
-WEBAPP_URL = "https://your-mini-app-url.com"
+WEBAPP_URL = "https://ip-55.onrender.com"
 
 @router.message(Command("app", "webapp"))
 async def cmd_webapp(message: Message):
