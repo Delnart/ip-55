@@ -527,62 +527,76 @@
             )
         }
 
-        function Schedule({ onNavigate }) {
+        function Schedule() {
             const [schedule, setSchedule] = useState(null);
-            const [error, setError] = useState(null);
             const [week, setWeek] = useState(1);
-            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-            const dayNames = { Monday: 'Понеділок', Tuesday: 'Вівторок', Wednesday: 'Середа', Thursday: 'Четвер', Friday: "П'ятниця" };
+            const [error, setError] = useState(null);
 
             useEffect(() => { 
-                fetch(`${API}/schedule`)
+                fetch(`${API_BASE}/schedule`)
                     .then(r => r.json())
                     .then(data => {
-                        // Check if data is valid
-                        if(data && data.scheduleFirstWeek) setSchedule(data);
-                        else setError('Дані розкладу не отримано. Перевірте підключення до API.');
+                        if(data) setSchedule(data);
+                        else setError('Помилка завантаження');
                     })
-                    .catch(e => setError('Помилка завантаження розкладу.')); 
+                    .catch(() => setError('Помилка')); 
             }, []);
+
+            if (error) return <div className="p-10 text-center text-red-500">{error}</div>;
+            if (!schedule) return <div className="p-10 text-center">Завантаження...</div>;
+
+            const weekKey = week === 1 ? 'scheduleFirstWeek' : 'scheduleSecondWeek';
             
-            if(error) return <div className="p-10 text-center text-red-500 font-bold">{error}</div>;
-            if(!schedule) return <div className="p-10 text-center">Завантаження розкладу...</div>;
+            // Масив днів для ітерації (порядок відображення)
+            const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            
+            // Назви для заголовків
+            const dayHeaders = { 
+                Monday: 'Понеділок', Tuesday: 'Вівторок', Wednesday: 'Середа', 
+                Thursday: 'Четвер', Friday: "П'ятниця", Saturday: "Субота" 
+            };
+            
+            // Ключі, які повертає API (Cyrillic)
+            const apiDayKeys = { 
+                Monday: 'Пн', Tuesday: 'Вв', Wednesday: 'Ср', 
+                Thursday: 'Чт', Friday: 'Пт', Saturday: 'Сб' 
+            };
 
             return (
-                <div className="p-4 pb-24 animate-enter">
-                    <div className="flex bg-gray-200 p-1 rounded-xl mb-4">
-                        <button onClick={() => setWeek(1)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${week===1 ? 'bg-white shadow' : 'text-gray-500'}`}>1 Тиждень</button>
-                        <button onClick={() => setWeek(2)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${week===2 ? 'bg-white shadow' : 'text-gray-500'}`}>2 Тиждень</button>
+                <div className="p-4 pb-24 animate-in">
+                    <div className="flex bg-gray-200 p-1 rounded-xl mb-6">
+                        <button onClick={() => setWeek(1)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${week === 1 ? 'bg-white shadow-sm' : 'text-gray-500'}`}>1 Тиждень</button>
+                        <button onClick={() => setWeek(2)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${week === 2 ? 'bg-white shadow-sm' : 'text-gray-500'}`}>2 Тиждень</button>
                     </div>
-
                     <div className="space-y-6">
-                        {days.map(d => {
-                            const pairs = schedule[week===1 ? 'scheduleFirstWeek' : 'scheduleSecondWeek'].find(x => x.day === d)?.pairs || [];
-                            if(!pairs.length) return null;
+                        {daysOrder.map(dayCode => {
+                            // Шукаємо день за кириличним ключем, який дає API
+                            const dayData = schedule[weekKey].find(d => d.day === apiDayKeys[dayCode]);
+                            
+                            if (!dayData?.pairs?.length) return null;
+                            
                             return (
-                                <div key={d}>
-                                    <h3 className="text-gray-400 font-bold uppercase text-xs mb-2 pl-1">{dayNames[d]}</h3>
-                                    <div className="space-y-2">
-                                        {pairs.map((p, i) => {
-                                            const isLec = p.type.includes('Лек');
-                                            const isLab = p.type.includes('Лаб');
-                                            const color = isLec ? 'border-purple-500' : isLab ? 'border-blue-500' : 'border-orange-500';
-                                            const bg = isLec ? 'bg-purple-50 text-purple-700' : isLab ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-700';
-                                            
+                                <div key={dayCode}>
+                                    <h3 className="text-gray-400 font-bold uppercase text-xs mb-2 pl-1">{dayHeaders[dayCode]}</h3>
+                                    <div className="space-y-3">
+                                        {dayData.pairs.map((pair, idx) => {
+                                            const isLec = pair.type.includes('Лек');
                                             return (
-                                                <div key={i} onClick={() => onNavigate('search_subject', p.name)} className={`bg-white p-3 rounded-xl border-l-4 shadow-sm flex gap-3 ${color}`}>
-                                                    <div className="font-bold text-gray-900 w-12 text-sm pt-1">{p.time.slice(0,5)}</div>
+                                                <div key={idx} className={`p-4 rounded-xl border-l-4 ${isLec ? 'border-purple-500' : 'border-orange-500'} bg-white shadow-sm flex gap-4`}>
+                                                    <div className="flex flex-col items-center justify-center min-w-[50px] border-r border-gray-100 pr-4">
+                                                        <span className="font-bold text-gray-900 text-sm">{pair.time.substring(0, 5)}</span>
+                                                    </div>
                                                     <div>
-                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${bg}`}>{p.type}</span>
-                                                        <h4 className="font-bold text-gray-800 leading-tight my-1">{p.name}</h4>
-                                                        <p className="text-xs text-gray-500">{p.teacherName}</p>
+                                                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${isLec ? 'bg-purple-100 text-purple-700' : 'bg-orange-100 text-orange-700'}`}>{pair.type}</span>
+                                                        <h4 className="font-bold text-gray-800 leading-tight mt-1 mb-1">{pair.name}</h4>
+                                                        <p className="text-xs text-gray-500">👨‍🏫 {pair.teacherName}</p>
                                                     </div>
                                                 </div>
-                                            )
+                                            );
                                         })}
                                     </div>
                                 </div>
-                            )
+                            );
                         })}
                     </div>
                 </div>
