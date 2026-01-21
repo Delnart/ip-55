@@ -17,7 +17,7 @@ MONGODB_URL = os.getenv('MONGODB_URL', 'mongodb://localhost:27017/university_bot
 # ВАЖЛИВО: Тут виправлено логіку пріоритету
 KPI_GROUP_ID = os.getenv('KPI_GROUP_ID') or 'ec73a1ae-3542-4009-832e-2cc033ffe14b'
 KPI_API_URL = f"https://api.campus.kpi.ua/schedule/lessons?groupId={KPI_GROUP_ID}"
-
+WEBAPP_URL = "https://ip-55.onrender.com"
 TIMEZONE = 'Europe/Kiev'
 
 NOTIFICATION_MINUTES_BEFORE = 10

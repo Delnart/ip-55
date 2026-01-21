@@ -1,14 +1,13 @@
 from aiogram import Router, F
 from aiogram.types import Message, WebAppInfo, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
-from config import GROUP_ID
+from config import WEBAPP_URL
 
 router = Router()
 
-WEBAPP_URL = "https://ip-55.onrender.com"
-
 @router.message(Command("app", "webapp"))
 async def cmd_webapp(message: Message):
+    """Команда /app працює і в ЛС, і в групах"""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
             text="📱 Відкрити додаток",
@@ -18,11 +17,7 @@ async def cmd_webapp(message: Message):
     
     await message.answer(
         "🎓 **Університетський помічник**\n\n"
-        "Відкрийте міні-додаток для доступу до:\n"
-        "• 📅 Розкладу занять\n"
-        "• 👥 Черг на здачу лаб\n"
-        "• 📚 Тем рефератів\n"
-        "• 📝 Домашніх завдань",
+        "Натисніть кнопку нижче, щоб відкрити додаток:",
         reply_markup=keyboard
     )
 
@@ -36,8 +31,7 @@ async def cmd_queues(message: Message):
     ])
     
     await message.answer(
-        "👥 **Черги на здачу**\n\n"
-        "Переглядайте та записуйтесь в черги на здачу лабораторних робіт",
+        "👥 **Черги на здачу**",
         reply_markup=keyboard
     )
 
@@ -51,8 +45,7 @@ async def cmd_topics(message: Message):
     ])
     
     await message.answer(
-        "📚 **Теми рефератів**\n\n"
-        "Виберіть тему для реферату або презентації",
+        "📚 **Теми рефератів**",
         reply_markup=keyboard
     )
 
@@ -66,11 +59,6 @@ async def cmd_homework(message: Message):
     ])
     
     await message.answer(
-        "📝 **Домашні завдання**\n\n"
-        "Переглядайте та додавайте домашні завдання",
+        "📝 **Домашні завдання**",
         reply_markup=keyboard
     )
-
-@router.message(F.chat.id == GROUP_ID, Command("app", "webapp"))
-async def group_webapp(message: Message):
-    await cmd_webapp(message)

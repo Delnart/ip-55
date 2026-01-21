@@ -342,12 +342,19 @@ async def handle_group_messages(message: Message):
         )
         logger.info(f"Додано учасника з групового повідомлення: {user.username} ({user.id})")
 
-@router.message(F.chat.id == GROUP_ID, Command("test"))
+@router.message(Command("test"))
 async def test_command(message: Message):
-    """Тестова команда для перевірки роботи бота в групі"""
+    """
+    Тестова команда для перевірки роботи бота.
+    Працює усюди, щоб можна було дізнатися ID чату.
+    """
+    is_correct_group = (message.chat.id == GROUP_ID)
+    status_icon = "✅" if is_correct_group else "⚠️"
+    
     await message.reply(
-        f"✅ Бот працює в групі!\n"
-        f"👤 Користувач: {message.from_user.first_name}\n"
-        f"🆔 ID групи: {message.chat.id}\n"
-        f"🤖 Відповідь від бота"
+        f"🤖 **Бот на зв'язку!**\n\n"
+        f"👤 Ти: {message.from_user.full_name}\n"
+        f"🆔 ID цього чату: `{message.chat.id}`\n"
+        f"⚙️ Налаштований GROUP_ID: `{GROUP_ID}`\n"
+        f"{status_icon} Співпадіння: {is_correct_group}"
     )
