@@ -1,512 +1,318 @@
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
-from typing import Optional, List
-from datetime import datetime
-from database.connection import db
-from config import ADMIN_IDS
-from bot.utils.api import ScheduleAPI
+import aiohttp
+import json
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional
+from config import KPI_API_URL, DAYS_TRANSLATION, CLASS_TYPES, TIMEZONE
+import pytz
+import logging
 
-# ВАЖЛИВО: Використовуємо APIRouter замість FastAPI
-router = APIRouter()
+logger = logging.getLogger(__name__)
 
-# --- Моделі даних ---
-class User(BaseModel):
-    telegramId: int
-    fullName: Optional[str] = None
-    username: Optional[str] = None
+CLASS_TIMINGS = {
+    "08:30:00": "10:05:00",
+    "10:25:00": "12:00:00",
+    "12:20:00": "13:55:00",
+    "14:15:00": "15:50:00",
+    "16:10:00": "17:45:00",
+    "18:30:00": "20:05:00",
+    "20:20:00": "21:55:00"
+}
 
-class QueueEntry(BaseModel):
-    queueId: str
-    telegramId: int
-    labNumber: int
-    position: Optional[int] = None
+def get_class_end_time(start_time: str) -> Optional[str]:
+    """Повертає час закінчення пари за її початком"""
+    if len(start_time.split(':')) == 2:
+        start_time += ':00'
+    return CLASS_TIMINGS.get(start_time)
 
-class QueueUpdate(BaseModel):
-    queueId: str
-    userId: str
-    status: str
 
-class QueueConfig(BaseModel):
-    maxSlots: int = 31
-    minMaxRule: bool = True
-    priorityMove: bool = True
-    maxAttempts: int = 3
-
-class Subject(BaseModel):
-    name: str
-    type: str
-
-class TopicEntry(BaseModel):
-    subjectId: str
-    telegramId: int
-    topicNumber: int
-
-class Homework(BaseModel):
-    subject: str
-    description: str
-    deadline: Optional[str] = None
-
-async def is_admin(telegram_id: int) -> bool:
-    return telegram_id in ADMIN_IDS
-
-# --- Ендпоінти ---
-
-@router.get("/schedule")
-async def get_schedule():
-    schedule = await ScheduleAPI.get_schedule()
-    if not schedule:
-        raise HTTPException(status_code=404, detail="Schedule not found")
-    return schedule
-
-@router.post("/users/update")
-async def update_user(user: User):
-    try:
-        await db.db.users.update_one(
-            {"telegramId": user.telegramId},
-            {"$set": {
-                "fullName": user.fullName,
-                "username": user.username,
-                "updatedAt": datetime.utcnow()
-            }},
-            upsert=True
-        )
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/users/{telegram_id}")
-async def get_user(telegram_id: int):
-    user = await db.db.users.find_one({"telegramId": telegram_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    user["_id"] = str(user["_id"])
-    return user
-
-@router.post("/subjects")
-async def create_subject(subject: Subject):
-    try:
-        result = await db.db.subjects.insert_one({
-            "name": subject.name,
-            "type": subject.type,
-            "createdAt": datetime.utcnow()
-        })
-        return {"success": True, "id": str(result.inserted_id)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/subjects")
-async def get_subjects():
-    subjects = await db.db.subjects.find().to_list(1000)
-    for s in subjects:
-        s["_id"] = str(s["_id"])
-    return subjects
-
-@router.post("/queues")
-async def create_queue(data: dict):
-    try:
-        subject_id = data.get("subjectId")
-        existing = await db.db.queues.find_one({"subjectId": subject_id})
-        if existing:
-            return {"success": True, "queue": {
-                "_id": str(existing["_id"]),
-                "subjectId": existing["subjectId"],
-                "isActive": existing.get("isActive", True),
-                "entries": existing.get("entries", []),
-                "config": existing.get("config", {})
-            }}
-        
-        result = await db.db.queues.insert_one({
-            "subjectId": subject_id,
-            "isActive": True,
-            "entries": [],
-            "config": {
-                "maxSlots": 31,
-                "minMaxRule": True,
-                "priorityMove": True,
-                "maxAttempts": 3
-            },
-            "createdAt": datetime.utcnow()
-        })
-        return {"success": True, "id": str(result.inserted_id)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/queues/subject/{subject_id}")
-async def get_queue_by_subject(subject_id: str):
-    queue = await db.db.queues.find_one({"subjectId": subject_id})
-    if not queue:
-        return None
+class ScheduleAPI:
+    """Клас для роботи з API розкладу КПІ"""
     
-    queue["_id"] = str(queue["_id"])
+    @staticmethod
+    def get_week_number(date: datetime) -> int:
+        """Отримання номера навчального тижня (1 - перший, 2 - другий)"""
+        if date.tzinfo is not None:
+            date = date.replace(tzinfo=None)
+        
+        year = date.year
+        if date.month < 9: 
+            year -= 1
+        
+        start_of_year = datetime(year, 9, 1)
+        
+        days_since_monday = start_of_year.weekday()
+        first_monday = start_of_year - timedelta(days=days_since_monday)
+        
+        weeks_diff = (date - first_monday).days // 7
+        
+        return (weeks_diff % 2) + 1
     
-    for entry in queue.get("entries", []):
-        if entry.get("userId"):
-            user = await db.db.users.find_one({"_id": entry["userId"]})
-            if user:
-                entry["user"] = {
-                    "_id": str(user["_id"]),
-                    "fullName": user.get("fullName"),
-                    "telegramId": user.get("telegramId"),
-                    "username": user.get("username")
-                }
+    @staticmethod
+    async def get_schedule() -> Optional[Dict[str, Any]]:
+        """Отримання розкладу з API"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(KPI_API_URL) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return data
+                    else:
+                        logger.error(f"API повернув статус {response.status}")
+                        return None
+        except Exception as e:
+            logger.error(f"Помилка отримання розкладу з API: {e}")
+            return None
     
-    return queue
+    @staticmethod
+    async def format_class_info(class_data: Dict[str, Any]) -> str:
+        """Форматування інформації про пару з посиланнями та часом закінчення"""
+        # Імпорт всередині функції, щоб уникнути циклічної залежності з models.py
+        from database.models import LinksManager
+        
+        class_type = CLASS_TYPES.get(class_data.get('type', ''), class_data.get('type', ''))
+        start_time = class_data.get('time', '')
+        end_time_str = get_class_end_time(start_time)
 
-@router.post("/queues/join")
-async def join_queue(entry: QueueEntry):
-    try:
-        queue = await db.db.queues.find_one({"_id": entry.queueId})
-        if not queue:
-            raise HTTPException(status_code=404, detail="Queue not found")
-        
-        if not queue.get("isActive", True):
-            raise HTTPException(status_code=400, detail="Queue is closed")
-        
-        user = await db.db.users.find_one({"telegramId": entry.telegramId})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        entries = queue.get("entries", [])
-        user_id = str(user["_id"])
-        
-        existing_entry = next((e for e in entries if e.get("userId") == user_id), None)
-        if existing_entry:
-            raise HTTPException(status_code=400, detail="Already in queue")
-        
-        if entry.position:
-            position_taken = next((e for e in entries if e.get("position") == entry.position), None)
-            if position_taken:
-                raise HTTPException(status_code=400, detail="Position already taken")
+        if end_time_str:
+            start_time_short = start_time[:5]
+            end_time_short = end_time_str[:5]
+            time_display = f"⏰ {start_time_short} - {end_time_short}"
         else:
-            entry.position = len(entries) + 1
-        
-        new_entry = {
-            "userId": user_id,
-            "labNumber": entry.labNumber,
-            "position": entry.position,
-            "status": "waiting",
-            "joinedAt": datetime.utcnow().isoformat()
-        }
-        
-        entries.append(new_entry)
-        
-        await db.db.queues.update_one(
-            {"_id": entry.queueId},
-            {"$set": {"entries": entries}}
-        )
-        
-        return {"success": True}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            time_display = f"⏰ {start_time}"
 
-@router.post("/queues/leave")
-async def leave_queue(data: dict):
-    try:
-        queue_id = data.get("queueId")
-        telegram_id = data.get("telegramId")
+        name = class_data.get('name', '')
+        teacher = class_data.get('teacherName', '')
+        place = class_data.get('place', '')
         
-        user = await db.db.users.find_one({"telegramId": telegram_id})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        info = f"{class_type}\n"
+        info += f"{time_display}\n"
+        info += f"📖 {name}\n"
+        info += f"👨‍🏫 {teacher}\n"
         
-        user_id = str(user["_id"])
+        if place:
+            info += f"📍 {place}\n"
         
-        queue = await db.db.queues.find_one({"_id": queue_id})
-        if not queue:
-            raise HTTPException(status_code=404, detail="Queue not found")
+        link_data = await LinksManager.get_link(name, teacher, class_data.get('type', ''))
         
-        entries = queue.get("entries", [])
-        entries = [e for e in entries if e.get("userId") != user_id]
+        if link_data:
+            meet_link = link_data.get('meet_link')
+            classroom_link = link_data.get('classroom_link')
+            
+            if meet_link:
+                info += f"🔗 [Приєднатися до зустрічі]({meet_link})\n"
+            
+            if classroom_link:
+                info += f"📖 [Google Classroom]({classroom_link})\n"
+        else:
+            info += f"⚠️ Посилання не додані\n"
         
-        await db.db.queues.update_one(
-            {"_id": queue_id},
-            {"$set": {"entries": entries}}
-        )
-        
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/queues/kick")
-async def kick_from_queue(data: dict):
-    try:
-        queue_id = data.get("queueId")
-        admin_tg_id = data.get("adminTgId")
-        target_user_id = data.get("targetUserId")
-        
-        if not await is_admin(admin_tg_id):
-            raise HTTPException(status_code=403, detail="Not authorized")
-        
-        queue = await db.db.queues.find_one({"_id": queue_id})
-        if not queue:
-            raise HTTPException(status_code=404, detail="Queue not found")
-        
-        entries = queue.get("entries", [])
-        entries = [e for e in entries if e.get("userId") != target_user_id]
-        
-        await db.db.queues.update_one(
-            {"_id": queue_id},
-            {"$set": {"entries": entries}}
-        )
-        
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/queues/toggle")
-async def toggle_queue(data: dict):
-    try:
-        queue_id = data.get("queueId")
-        
-        queue = await db.db.queues.find_one({"_id": queue_id})
-        if not queue:
-            raise HTTPException(status_code=404, detail="Queue not found")
-        
-        new_state = not queue.get("isActive", True)
-        
-        await db.db.queues.update_one(
-            {"_id": queue_id},
-            {"$set": {"isActive": new_state}}
-        )
-        
-        return {"success": True, "isActive": new_state}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.patch("/queues/status")
-async def update_queue_status(update: QueueUpdate):
-    try:
-        queue = await db.db.queues.find_one({"_id": update.queueId})
-        if not queue:
-            raise HTTPException(status_code=404, detail="Queue not found")
-        
-        entries = queue.get("entries", [])
-        
-        for entry in entries:
-            if entry.get("userId") == update.userId:
-                entry["status"] = update.status
-                break
-        
-        await db.db.queues.update_one(
-            {"_id": update.queueId},
-            {"$set": {"entries": entries}}
-        )
-        
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/topics")
-async def create_topics_list(data: dict):
-    try:
-        subject_id = data.get("subjectId")
-        max_topics = data.get("maxTopics", 30)
-        
-        result = await db.db.topics.insert_one({
-            "subjectId": subject_id,
-            "maxTopics": max_topics,
-            "entries": [],
-            "createdAt": datetime.utcnow()
-        })
-        
-        return {"success": True, "id": str(result.inserted_id)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/topics/subject/{subject_id}")
-async def get_topics_by_subject(subject_id: str):
-    topics = await db.db.topics.find_one({"subjectId": subject_id})
-    if not topics:
-        return None
+        return info
     
-    topics["_id"] = str(topics["_id"])
+    @staticmethod
+    async def get_current_class_info() -> Optional[Dict[str, Any]]:
+        """Отримання інформації про поточну пару"""
+        try:
+            schedule_data = await ScheduleAPI.get_schedule()
+            if not schedule_data:
+                return None
+            
+            kiev_tz = pytz.timezone(TIMEZONE)
+            now = datetime.now(kiev_tz)
+            
+            week_number = ScheduleAPI.get_week_number(now)
+            week_key = 'scheduleFirstWeek' if week_number == 1 else 'scheduleSecondWeek'
+            
+            day_mapping = {
+                'Monday': 'Пн', 'Tuesday': 'Вв', 'Wednesday': 'Ср',
+                'Thursday': 'Чт', 'Friday': 'Пт', 'Saturday': 'Сб'
+            }
+            day_code = day_mapping.get(now.strftime('%A'))
+            if not day_code:
+                return None
+            
+            week_schedule = schedule_data.get(week_key, [])
+            today_classes = None
+            for day_data in week_schedule:
+                if day_data.get('day') == day_code:
+                    today_classes = day_data.get('pairs', [])
+                    break
+            
+            if not today_classes:
+                return None
+
+            for class_data in today_classes:
+                start_time_str = class_data.get('time')
+                end_time_str = get_class_end_time(start_time_str)
+
+                if not start_time_str or not end_time_str:
+                    continue
+
+                try:
+                    start_time = datetime.strptime(start_time_str, '%H:%M:%S').time()
+                    end_time = datetime.strptime(end_time_str, '%H:%M:%S').time()
+                except ValueError:
+                    continue
+
+                start_datetime = kiev_tz.localize(datetime.combine(now.date(), start_time))
+                end_datetime = kiev_tz.localize(datetime.combine(now.date(), end_time))
+
+                if start_datetime <= now <= end_datetime:
+                    class_data['end_datetime'] = end_datetime
+                    return class_data
+
+            return None
+        except Exception as e:
+            logger.error(f"Помилка отримання поточної пари: {e}")
+            return None
+
+    @staticmethod
+    async def get_today_schedule() -> str:
+        """Розклад на сьогодні з посиланнями"""
+        try:
+            schedule_data = await ScheduleAPI.get_schedule()
+            if not schedule_data:
+                return "❌ Не вдалося отримати розклад"
+            
+            kiev_tz = pytz.timezone(TIMEZONE)
+            now = datetime.now(kiev_tz)
+            today = now.strftime('%A')
+            
+            week_number = ScheduleAPI.get_week_number(now)
+            week_key = 'scheduleFirstWeek' if week_number == 1 else 'scheduleSecondWeek'
+            
+            day_mapping = {
+                'Monday': 'Пн',
+                'Tuesday': 'Вв',
+                'Wednesday': 'Ср',
+                'Thursday': 'Чт',
+                'Friday': 'Пт',
+                'Saturday': 'Сб'
+            }
+            
+            day_code = day_mapping.get(today)
+            if not day_code:
+                return "❌ Не вдалося визначити день тижня"
+            
+            week_schedule = schedule_data.get(week_key, [])
+            today_classes = None
+            
+            for day_data in week_schedule:
+                if day_data.get('day') == day_code:
+                    today_classes = day_data.get('pairs', [])
+                    break
+            
+            if not today_classes:
+                return f"📅 На сьогодні ({DAYS_TRANSLATION[day_code]}) пар немає"
+            
+            week_name = "1-й тиждень" if week_number == 1 else "2-й тиждень"
+            result = f"📅 Розклад на сьогодні ({DAYS_TRANSLATION[day_code]}, {week_name}):\n\n"
+            
+            for i, class_data in enumerate(today_classes, 1):
+                class_info = await ScheduleAPI.format_class_info(class_data)
+                result += f"**{i} пара**\n{class_info}\n"
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Помилка отримання розкладу на сьогодні: {e}")
+            return "❌ Помилка отримання розкладу"
     
-    for entry in topics.get("entries", []):
-        if entry.get("userId"):
-            user = await db.db.users.find_one({"_id": entry["userId"]})
-            if user:
-                entry["user"] = {
-                    "_id": str(user["_id"]),
-                    "fullName": user.get("fullName"),
-                    "telegramId": user.get("telegramId")
-                }
+    @staticmethod
+    async def get_tomorrow_schedule() -> str:
+        """Розклад на завтра з посиланнями"""
+        try:
+            schedule_data = await ScheduleAPI.get_schedule()
+            if not schedule_data:
+                return "❌ Не вдалося отримати розклад"
+            
+            kiev_tz = pytz.timezone(TIMEZONE)
+            tomorrow = datetime.now(kiev_tz) + timedelta(days=1)
+            tomorrow_day = tomorrow.strftime('%A')
+            
+            week_number = ScheduleAPI.get_week_number(tomorrow)
+            week_key = 'scheduleFirstWeek' if week_number == 1 else 'scheduleSecondWeek'
+            
+            day_mapping = {
+                'Monday': 'Пн',
+                'Tuesday': 'Вв',
+                'Wednesday': 'Ср',
+                'Thursday': 'Чт',
+                'Friday': 'Пт',
+                'Saturday': 'Сб',
+                'Sunday': 'Пн'  
+            }
+            
+            day_code = day_mapping.get(tomorrow_day)
+            if not day_code:
+                return "❌ Не вдалося визначити день тижня"
+            
+            if tomorrow_day == 'Sunday':
+                tomorrow = tomorrow + timedelta(days=1)
+                week_number = ScheduleAPI.get_week_number(tomorrow)
+                week_key = 'scheduleFirstWeek' if week_number == 1 else 'scheduleSecondWeek'
+            
+            week_schedule = schedule_data.get(week_key, [])
+            tomorrow_classes = None
+            
+            for day_data in week_schedule:
+                if day_data.get('day') == day_code:
+                    tomorrow_classes = day_data.get('pairs', [])
+                    break
+            
+            if not tomorrow_classes:
+                return f"📅 На завтра ({DAYS_TRANSLATION[day_code]}) пар немає"
+            
+            week_name = "1-й тиждень" if week_number == 1 else "2-й тиждень"
+            result = f"📅 Розклад на завтра ({DAYS_TRANSLATION[day_code]}, {week_name}):\n\n"
+            
+            for i, class_data in enumerate(tomorrow_classes, 1):
+                class_info = await ScheduleAPI.format_class_info(class_data)
+                result += f"**{i} пара**\n{class_info}\n"
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Помилка отримання розкладу на завтра: {e}")
+            return "❌ Помилка отримання розкладу"
     
-    return topics
-
-@router.post("/topics/claim")
-async def claim_topic(entry: TopicEntry):
-    try:
-        topics = await db.db.topics.find_one({"_id": entry.subjectId})
-        if not topics:
-            raise HTTPException(status_code=404, detail="Topics list not found")
-        
-        user = await db.db.users.find_one({"telegramId": entry.telegramId})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        entries = topics.get("entries", [])
-        user_id = str(user["_id"])
-        
-        topic_taken = next((e for e in entries if e.get("topicNumber") == entry.topicNumber), None)
-        if topic_taken:
-            raise HTTPException(status_code=400, detail="Topic already taken")
-        
-        new_entry = {
-            "userId": user_id,
-            "topicNumber": entry.topicNumber,
-            "claimedAt": datetime.utcnow().isoformat()
-        }
-        
-        entries.append(new_entry)
-        
-        await db.db.topics.update_one(
-            {"_id": entry.subjectId},
-            {"$set": {"entries": entries}}
-        )
-        
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/homework")
-async def add_homework(hw: Homework):
-    try:
-        result = await db.db.homework.insert_one({
-            "subject": hw.subject,
-            "description": hw.description,
-            "deadline": hw.deadline,
-            "createdAt": datetime.utcnow()
-        })
-        return {"success": True, "id": str(result.inserted_id)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/homework")
-async def get_homework():
-    homework = await db.db.homework.find().sort("createdAt", -1).to_list(100)
-    for hw in homework:
-        hw["_id"] = str(hw["_id"])
-    return homework
-
-@router.delete("/homework/{hw_id}")
-async def delete_homework(hw_id: str, telegram_id: int):
-    try:
-        if not await is_admin(telegram_id):
-            raise HTTPException(status_code=403, detail="Not authorized")
-        
-        await db.db.homework.delete_one({"_id": hw_id})
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.patch("/homework/{hw_id}")
-async def update_homework(hw_id: str, hw: Homework, telegram_id: int):
-    try:
-        if not await is_admin(telegram_id):
-            raise HTTPException(status_code=403, detail="Not authorized")
-        
-        await db.db.homework.update_one(
-            {"_id": hw_id},
-            {"$set": {
-                "subject": hw.subject,
-                "description": hw.description,
-                "deadline": hw.deadline,
-                "updatedAt": datetime.utcnow()
-            }}
-        )
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/queues/{queue_id}/config")
-async def get_queue_config(queue_id: str):
-    try:
-        queue = await db.db.queues.find_one({"_id": queue_id})
-        if not queue:
-            raise HTTPException(status_code=404, detail="Queue not found")
-        
-        return queue.get("config", {
-            "maxSlots": 31,
-            "minMaxRule": True,
-            "priorityMove": True,
-            "maxAttempts": 3
-        })
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.patch("/queues/{queue_id}/config")
-async def update_queue_config(queue_id: str, config: QueueConfig):
-    try:
-        await db.db.queues.update_one(
-            {"_id": queue_id},
-            {"$set": {"config": config.dict()}}
-        )
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/topics/release")
-async def release_topic(data: dict):
-    try:
-        subject_id = data.get("subjectId")
-        telegram_id = data.get("telegramId")
-        topic_number = data.get("topicNumber")
-        
-        topics = await db.db.topics.find_one({"_id": subject_id})
-        if not topics:
-            raise HTTPException(status_code=404, detail="Topics list not found")
-        
-        user = await db.db.users.find_one({"telegramId": telegram_id})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        user_id = str(user["_id"])
-        entries = topics.get("entries", [])
-        
-        entries = [e for e in entries if not (e.get("userId") == user_id and e.get("topicNumber") == topic_number)]
-        
-        await db.db.topics.update_one(
-            {"_id": subject_id},
-            {"$set": {"entries": entries}}
-        )
-        
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/queues/move")
-async def move_in_queue(data: dict):
-    try:
-        queue_id = data.get("queueId")
-        user_id = data.get("userId")
-        new_position = data.get("newPosition")
-        
-        queue = await db.db.queues.find_one({"_id": queue_id})
-        if not queue:
-            raise HTTPException(status_code=404, detail="Queue not found")
-        
-        if not queue.get("config", {}).get("priorityMove", True):
-            raise HTTPException(status_code=400, detail="Moving is disabled")
-        
-        entries = queue.get("entries", [])
-        
-        user_entry = next((e for e in entries if e.get("userId") == user_id), None)
-        if not user_entry:
-            raise HTTPException(status_code=404, detail="User not in queue")
-        
-        position_taken = next((e for e in entries if e.get("position") == new_position and e.get("userId") != user_id), None)
-        if position_taken:
-            raise HTTPException(status_code=400, detail="Position already taken")
-        
-        user_entry["position"] = new_position
-        
-        await db.db.queues.update_one(
-            {"_id": queue_id},
-            {"$set": {"entries": entries}}
-        )
-        
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    @staticmethod
+    async def get_week_schedule(week_offset: int = 0) -> str:
+        """Розклад на тиждень з посиланнями (0 - поточний, 1 - наступний)"""
+        try:
+            schedule_data = await ScheduleAPI.get_schedule()
+            if not schedule_data:
+                return "❌ Не вдалося отримати розклад"
+            
+            kiev_tz = pytz.timezone(TIMEZONE)
+            target_date = datetime.now(kiev_tz) + timedelta(weeks=week_offset)
+            
+            week_number = ScheduleAPI.get_week_number(target_date)
+            week_key = 'scheduleFirstWeek' if week_number == 1 else 'scheduleSecondWeek'
+            
+            week_name = "Поточний тиждень" if week_offset == 0 else "Наступний тиждень"
+            week_type = "1-й тиждень" if week_number == 1 else "2-й тиждень"
+            
+            week_schedule = schedule_data.get(week_key, [])
+            
+            if not week_schedule:
+                return f"❌ Розклад на {week_name.lower()} не знайдено"
+            
+            result = f"📅 {week_name} ({week_type}):\n\n"
+            
+            for day_data in week_schedule:
+                day_code = day_data.get('day')
+                day_name = DAYS_TRANSLATION.get(day_code, day_code)
+                pairs = day_data.get('pairs', [])
+                
+                if pairs:
+                    result += f"📌 **{day_name}**:\n"
+                    for i, class_data in enumerate(pairs, 1):
+                        class_info = await ScheduleAPI.format_class_info(class_data)
+                        result += f"_{i} пара_\n{class_info}\n"
+                    result += "\n"
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Помилка отримання розкладу на тиждень: {e}")
+            return "❌ Помилка отримання розкладу"
