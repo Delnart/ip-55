@@ -1,5 +1,5 @@
 export const CONFIG = {
-  API_URL: process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api',
+  API_URL: process.env.REACT_APP_API_URL || '/api',
   
   KPI_API_URL: 'https://api.campus.kpi.ua/schedule/lessons',
   
