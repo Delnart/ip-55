@@ -9,7 +9,7 @@ import pytz
 import asyncio
 from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
-
+from aiogram.utils.markdown import escape_md
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -346,14 +346,15 @@ async def handle_group_messages(message: Message):
 async def test_command(message: Message):
     """
     Тестова команда для перевірки роботи бота.
-    Працює усюди, щоб можна було дізнатися ID чату.
     """
     is_correct_group = (message.chat.id == GROUP_ID)
     status_icon = "✅" if is_correct_group else "⚠️"
     
+    safe_name = escape_md(message.from_user.full_name)
+    
     await message.reply(
         f"🤖 **Бот на зв'язку!**\n\n"
-        f"👤 Ти: {message.from_user.full_name}\n"
+        f"👤 Ти: {safe_name}\n"
         f"🆔 ID цього чату: `{message.chat.id}`\n"
         f"⚙️ Налаштований GROUP_ID: `{GROUP_ID}`\n"
         f"{status_icon} Співпадіння: {is_correct_group}"

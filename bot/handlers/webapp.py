@@ -7,14 +7,25 @@ router = Router()
 
 @router.message(Command("app", "webapp"))
 async def cmd_webapp(message: Message):
-    """Команда /app працює і в ЛС, і в групах"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text="📱 Відкрити додаток",
-            web_app=WebAppInfo(url=WEBAPP_URL)
-        )]
-    ])
     
+    if message.chat.type == 'private':
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="📱 Відкрити додаток",
+                web_app=WebAppInfo(url=WEBAPP_URL)
+            )]
+        ])
+    else:
+        bot_user = await message.bot.get_me()
+        url = f"https://t.me/{bot_user.username}?start=webapp"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="🤖 Відкрити в ЛС",
+                url=url
+            )]
+        ])
+
     await message.answer(
         "🎓 **Університетський помічник**\n\n"
         "Натисніть кнопку нижче, щоб відкрити додаток:",
