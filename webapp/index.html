@@ -20,39 +20,49 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
         const API = '/api';
+        const tg = window.Telegram?.WebApp;
         
         // --- Icons ---
         const Icons = {
             ArrowLeft: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>,
             Plus: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>,
             Trash: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+            Edit: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
+            Play: () => <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z" /></svg>,
             Clock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
             Check: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
-            Play: () => <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z" /></svg>
+            UserPlus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
         };
 
-        // --- Components ---
+        // --- COMPONENTS ---
 
         function SubjectsList({ user, isAdmin, onNavigate }) {
             const [subjects, setSubjects] = useState([]);
-            const [isAdding, setIsAdding] = useState(false);
-            const [newSub, setNewSub] = useState({ name: '', teacherLecture: '', teacherPractice: '' });
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editSub, setEditSub] = useState(null); 
+            const [form, setForm] = useState({ name: '', teacherLecture: '', teacherPractice: '' });
 
             useEffect(() => {
                 fetch(`${API}/subjects`).then(r => r.json()).then(setSubjects);
             }, []);
 
-            const handleAdd = async () => {
-                const res = await fetch(`${API}/subjects`, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(newSub)
-                });
-                if(res.ok) { setIsAdding(false); setNewSub({ name: '', teacherLecture: '', teacherPractice: '' }); fetch(`${API}/subjects`).then(r => r.json()).then(setSubjects); }
+            const openModal = (sub = null) => {
+                setEditSub(sub);
+                setForm(sub ? { ...sub } : { name: '', teacherLecture: '', teacherPractice: '' });
+                setIsModalOpen(true);
             };
 
-            const handleDelete = async (id, e) => {
+            const save = async () => {
+                const url = editSub ? `${API}/subjects/${editSub._id}` : `${API}/subjects`;
+                const method = editSub ? 'PUT' : 'POST';
+                await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(form) });
+                setIsModalOpen(false);
+                fetch(`${API}/subjects`).then(r => r.json()).then(setSubjects);
+            };
+            
+            const del = async (id, e) => {
                 e.stopPropagation();
                 if(confirm('Видалити предмет?')) {
                     await fetch(`${API}/subjects/${id}`, { method: 'DELETE' });
@@ -64,33 +74,53 @@
                 <div className="p-4 animate-enter pb-24">
                     <div className="flex justify-between items-center mb-6">
                         <h1 className="text-2xl font-bold text-gray-800">Дисципліни</h1>
-                        {isAdmin && <button onClick={() => setIsAdding(!isAdding)} className="p-2 bg-blue-100 text-blue-600 rounded-full"><Icons.Plus /></button>}
+                        {isAdmin && <button onClick={() => openModal()} className="p-2 bg-blue-100 text-blue-600 rounded-full"><Icons.Plus /></button>}
                     </div>
-
-                    {isAdding && (
-                        <div className="bg-white p-4 rounded-xl shadow-md mb-4 border border-blue-100">
-                            <input placeholder="Назва предмету" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={newSub.name} onChange={e => setNewSub({...newSub, name: e.target.value})} />
-                            <input placeholder="Лектор" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={newSub.teacherLecture} onChange={e => setNewSub({...newSub, teacherLecture: e.target.value})} />
-                            <input placeholder="Практик" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={newSub.teacherPractice} onChange={e => setNewSub({...newSub, teacherPractice: e.target.value})} />
-                            <button onClick={handleAdd} className="w-full bg-blue-600 text-white py-2 rounded-lg font-bold">Зберегти</button>
-                        </div>
-                    )}
 
                     <div className="grid gap-3">
                         {subjects.map(sub => (
                             <div key={sub._id} onClick={() => onNavigate('details', sub)} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 active:scale-[0.98] transition-transform relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-blue-50 to-transparent rounded-bl-full -mr-4 -mt-4"></div>
                                 <h3 className="font-bold text-lg text-gray-800 relative z-10">{sub.name}</h3>
                                 <p className="text-sm text-gray-500 mt-1 relative z-10">{sub.teacherPractice || sub.teacherLecture || 'Викладач не вказаний'}</p>
-                                {isAdmin && <button onClick={(e) => handleDelete(sub._id, e)} className="absolute bottom-4 right-4 text-red-300 hover:text-red-500 z-20"><Icons.Trash /></button>}
+                                {isAdmin && (
+                                    <div className="absolute bottom-4 right-4 z-20 flex gap-2">
+                                        <button onClick={(e) => { e.stopPropagation(); openModal(sub); }} className="text-gray-400 hover:text-blue-500"><Icons.Edit /></button>
+                                        <button onClick={(e) => del(sub._id, e)} className="text-gray-400 hover:text-red-500"><Icons.Trash /></button>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
+
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-sm rounded-2xl p-5">
+                                <h3 className="font-bold mb-4">{editSub ? 'Редагувати' : 'Новий предмет'}</h3>
+                                <input placeholder="Назва" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+                                <input placeholder="Лектор" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={form.teacherLecture} onChange={e => setForm({...form, teacherLecture: e.target.value})} />
+                                <input placeholder="Практик" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={form.teacherPractice} onChange={e => setForm({...form, teacherPractice: e.target.value})} />
+                                <div className="flex gap-2 mt-4">
+                                    <button onClick={save} className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">Зберегти</button>
+                                    <button onClick={() => setIsModalOpen(false)} className="px-4 bg-gray-100 rounded-lg">Скасувати</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
 
         function SubjectDetails({ subject, user, isAdmin, onNavigate, onBack }) {
+            // FIX: Handle null subject
+            if (!subject) {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+                         <p className="text-gray-500 mb-4">Предмет не знайдено або дані втрачено.</p>
+                         <button onClick={onBack} className="bg-blue-100 text-blue-600 px-4 py-2 rounded-lg font-bold">Повернутися назад</button>
+                    </div>
+                );
+            }
+
             return (
                 <div className="min-h-screen bg-white animate-enter">
                     <div className="p-4 border-b flex items-center gap-4 sticky top-0 bg-white z-20">
@@ -154,32 +184,65 @@
             const [queue, setQueue] = useState(null);
             const [labNum, setLabNum] = useState('');
             const [selectedSlot, setSelectedSlot] = useState(null);
+            const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+            const [allUsers, setAllUsers] = useState([]);
+            const [searchUser, setSearchUser] = useState('');
+            const [targetSlot, setTargetSlot] = useState(null);
+
+            // FIX: Handle null subject
+            if (!subject) return <div className="p-10 text-center"><button onClick={onBack}>Назад</button></div>;
 
             const load = async () => {
-                let res = await fetch(`${API}/queues/subject/${subject._id}`);
-                let data = await res.json();
-                if (!data) {
-                    await fetch(`${API}/queues`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ subjectId: subject._id }) });
-                    res = await fetch(`${API}/queues/subject/${subject._id}`);
-                    data = await res.json();
-                }
-                setQueue(data);
+                try {
+                    let res = await fetch(`${API}/queues/subject/${subject._id}`);
+                    let data = await res.json();
+                    if (!data) {
+                        await fetch(`${API}/queues`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ subjectId: subject._id }) });
+                        res = await fetch(`${API}/queues/subject/${subject._id}`);
+                        data = await res.json();
+                    }
+                    setQueue(data);
+                } catch(e) { console.error(e); }
+            };
+
+            const fetchUsers = async () => {
+                const res = await fetch(`${API}/users`);
+                const data = await res.json();
+                setAllUsers(data);
             };
 
             useEffect(() => { load(); const i = setInterval(load, 5000); return () => clearInterval(i); }, []);
 
-            const join = async (pos) => {
+            const join = async (pos, adminAddId = null) => {
                 if(!labNum) return alert('Введіть номер лабораторної!');
+                
+                const body = { 
+                    queueId: queue._id, 
+                    telegramId: user?.id, 
+                    labNumber: parseInt(labNum), 
+                    position: pos,
+                    isAdminAdd: !!adminAddId,
+                    targetUserId: adminAddId
+                };
+
                 const res = await fetch(`${API}/queues/join`, {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ queueId: queue._id, telegramId: user.id, labNumber: parseInt(labNum), position: pos })
+                    body: JSON.stringify(body)
                 });
                 if(!res.ok) {
                     const err = await res.json();
                     alert(err.detail);
                 } else {
-                    setLabNum(''); setSelectedSlot(null); load();
+                    setLabNum(''); setSelectedSlot(null); setIsAddUserOpen(false); load();
                 }
+            };
+
+            const kick = async (uid) => {
+                await fetch(`${API}/queues/leave`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ queueId: queue._id, isAdminKick: true, targetUserId: uid })
+                });
+                load(); setSelectedSlot(null);
             };
 
             const setStatus = async (uid, st) => {
@@ -194,7 +257,7 @@
                 await fetch(`${API}/queues/toggle`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ queueId: queue._id, adminId: user.id }) });
                 load();
             };
-            
+
             const toggleRule = async () => {
                 await fetch(`${API}/queues/config`, { 
                     method: 'PATCH', headers: {'Content-Type': 'application/json'}, 
@@ -204,13 +267,9 @@
             }
 
             if(!queue) return <div className="p-10 text-center">Завантаження...</div>;
+            const STATUS_COLORS = { preparing: 'bg-yellow-50 border-yellow-300', defending: 'bg-green-50 border-green-300', completed: 'bg-blue-50 border-blue-300', waiting: 'bg-white border-gray-200' };
 
-            const STATUS_COLORS = {
-                preparing: 'bg-yellow-50 border-yellow-300 text-yellow-800',
-                defending: 'bg-green-50 border-green-300 text-green-800',
-                completed: 'bg-blue-50 border-blue-300 text-blue-800',
-                waiting: 'bg-white border-gray-200'
-            };
+            const filteredUsers = allUsers.filter(u => u.fullName?.toLowerCase().includes(searchUser.toLowerCase()));
 
             return (
                 <div className="min-h-screen bg-gray-50 pb-20 animate-enter">
@@ -230,7 +289,7 @@
                     <div className="p-2 grid grid-cols-4 gap-2">
                         {Array.from({length: 31}, (_, i) => i+1).map(i => {
                             const entry = queue.entries.find(e => e.position === i);
-                            const style = entry ? STATUS_COLORS[entry.status] || STATUS_COLORS.waiting : 'bg-white border-dashed border-gray-300 opacity-70';
+                            const style = entry ? STATUS_COLORS[entry.status] || 'bg-white' : 'bg-white border-dashed border-gray-300 opacity-70';
                             
                             return (
                                 <div key={i} onClick={() => setSelectedSlot({ i, entry })} 
@@ -238,10 +297,8 @@
                                     <span className="absolute top-0.5 left-1 text-[8px] font-bold text-gray-400">{i}</span>
                                     {entry ? (
                                         <>
-                                            <div className="text-[10px] font-bold text-center leading-tight overflow-hidden h-6 flex items-center">{entry.user.fullName}</div>
+                                            <div className="text-[9px] font-bold text-center leading-tight overflow-hidden h-6 flex items-center justify-center w-full">{entry.user?.fullName || 'Гість'}</div>
                                             <div className="text-[9px] font-bold bg-white/50 px-1 rounded mt-0.5">Лб {entry.labNumber}</div>
-                                            {entry.status === 'defending' && <div className="absolute top-0.5 right-0.5 text-green-600"><Icons.Play /></div>}
-                                            {entry.status === 'preparing' && <div className="absolute top-0.5 right-0.5 text-yellow-600"><Icons.Clock /></div>}
                                         </>
                                     ) : <span className="text-gray-300 text-xl">+</span>}
                                 </div>
@@ -255,28 +312,52 @@
                                 <h3 className="text-xl font-bold mb-4">Слот #{selectedSlot.i}</h3>
                                 {selectedSlot.entry ? (
                                     <>
-                                        <p className="mb-2 text-lg">{selectedSlot.entry.user.fullName}</p>
+                                        <p className="mb-2 text-lg">{selectedSlot.entry.user?.fullName}</p>
                                         <p className="text-sm text-gray-500 mb-4">Лабораторна №{selectedSlot.entry.labNumber}</p>
                                         {isAdmin && (
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <button onClick={() => setStatus(selectedSlot.entry.userId, 'preparing')} className="p-2 bg-yellow-50 text-yellow-700 rounded-lg text-sm font-bold">Готується</button>
-                                                <button onClick={() => setStatus(selectedSlot.entry.userId, 'defending')} className="p-2 bg-green-50 text-green-700 rounded-lg text-sm font-bold">Здає</button>
-                                                <button onClick={() => setStatus(selectedSlot.entry.userId, 'completed')} className="p-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-bold">Здав</button>
-                                                <button onClick={() => setStatus(selectedSlot.entry.userId, 'waiting')} className="p-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold">Очікує</button>
+                                            <div className="space-y-3">
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <button onClick={() => setStatus(selectedSlot.entry.userId, 'preparing')} className="p-2 bg-yellow-50 text-yellow-700 rounded-lg text-sm font-bold">Готується</button>
+                                                    <button onClick={() => setStatus(selectedSlot.entry.userId, 'defending')} className="p-2 bg-green-50 text-green-700 rounded-lg text-sm font-bold">Здає</button>
+                                                    <button onClick={() => setStatus(selectedSlot.entry.userId, 'completed')} className="p-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-bold">Здав</button>
+                                                    <button onClick={() => setStatus(selectedSlot.entry.userId, 'waiting')} className="p-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold">Очікує</button>
+                                                </div>
+                                                <button onClick={() => kick(selectedSlot.entry.userId)} className="w-full bg-red-100 text-red-600 py-2 rounded-lg font-bold">Видалити з черги</button>
                                             </div>
                                         )}
-                                        {/* Kick / Leave logic could go here */}
                                     </>
                                 ) : (
                                     <>
-                                        {queue.isActive ? (
+                                        {(queue.isActive || isAdmin) ? (
                                             <>
                                                 <input type="number" placeholder="Номер лаби" className="w-full p-3 bg-gray-100 rounded-xl mb-4 text-center font-bold text-lg" value={labNum} onChange={e => setLabNum(e.target.value)} />
-                                                <button onClick={() => join(selectedSlot.i)} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">Записатись</button>
+                                                <button onClick={() => join(selectedSlot.i)} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold mb-2">Записатися</button>
+                                                {isAdmin && (
+                                                    <button onClick={() => { setIsAddUserOpen(true); setTargetSlot(selectedSlot.i); fetchUsers(); setSelectedSlot(null); }} className="w-full bg-gray-800 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2">
+                                                        <Icons.UserPlus /> Додати студента
+                                                    </button>
+                                                )}
                                             </>
                                         ) : <p className="text-red-500 font-bold text-center">Черга закрита</p>}
                                     </>
                                 )}
+                            </div>
+                        </div>
+                    )}
+
+                    {isAddUserOpen && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-sm rounded-2xl p-5 h-[80vh] flex flex-col">
+                                <h3 className="font-bold mb-4">Оберіть студента (Слот #{targetSlot})</h3>
+                                <input placeholder="Пошук..." className="p-2 border rounded-lg mb-4" value={searchUser} onChange={e => setSearchUser(e.target.value)} />
+                                <div className="overflow-y-auto flex-1 space-y-2">
+                                    {filteredUsers.map(u => (
+                                        <div key={u._id} onClick={() => join(targetSlot, u._id)} className="p-3 bg-gray-50 rounded-lg font-bold active:bg-blue-100">
+                                            {u.fullName}
+                                        </div>
+                                    ))}
+                                </div>
+                                <button onClick={() => setIsAddUserOpen(false)} className="mt-4 p-3 bg-gray-100 rounded-xl font-bold">Скасувати</button>
                             </div>
                         </div>
                     )}
@@ -286,110 +367,186 @@
 
         function Topics({ subject, user, isAdmin, onBack }) {
             const [topics, setTopics] = useState([]);
-            const [newTopic, setNewTopic] = useState('');
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editTopic, setEditTopic] = useState(null);
+            const [title, setTitle] = useState('');
+
+            // FIX: Handle null subject or user
+            if (!subject) return <div className="p-10 text-center"><button onClick={onBack}>Назад</button></div>;
 
             const load = () => fetch(`${API}/topics/${subject._id}`).then(r => r.json()).then(setTopics);
             useEffect(() => { load(); }, []);
 
-            const add = async () => {
-                await fetch(`${API}/topics`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ subjectId: subject._id, adminId: user.id, title: newTopic }) });
-                setNewTopic(''); load();
+            const save = async () => {
+                const url = editTopic ? `${API}/topics/${editTopic._id}` : `${API}/topics`;
+                const method = editTopic ? 'PUT' : 'POST';
+                await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ subjectId: subject._id, adminId: user.id, title }) });
+                setIsModalOpen(false); load();
+            };
+
+            const del = async (id) => {
+                if(confirm('Видалити тему?')) {
+                    await fetch(`${API}/topics/${id}?adminId=${user.id}`, { method: 'DELETE' });
+                    load();
+                }
             };
 
             const toggle = async (t) => {
-                const res = await fetch(`${API}/topics/toggle`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ topicId: t._id, telegramId: user.id }) });
-                if(res.ok) load(); else alert('Вже зайнято!');
+                if (!user || !user._mongoId) return alert("Зачекайте завантаження профілю...");
+                await fetch(`${API}/topics/toggle`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ topicId: t._id, telegramId: user.id }) });
+                load();
             };
 
             return (
                 <div className="min-h-screen bg-gray-50 p-4 animate-enter">
-                    <div className="flex gap-3 mb-4 items-center">
-                        <button onClick={onBack}><Icons.ArrowLeft /></button>
-                        <h1 className="font-bold text-xl">Теми рефератів</h1>
+                    <div className="flex gap-3 mb-4 items-center justify-between">
+                        <div className="flex gap-2 items-center">
+                            <button onClick={onBack}><Icons.ArrowLeft /></button>
+                            <h1 className="font-bold text-xl">Теми</h1>
+                        </div>
+                        {isAdmin && <button onClick={() => { setEditTopic(null); setTitle(''); setIsModalOpen(true); }} className="bg-blue-600 text-white p-2 rounded-lg"><Icons.Plus /></button>}
                     </div>
                     
-                    {isAdmin && (
-                        <div className="flex gap-2 mb-4">
-                            <input className="flex-1 p-2 rounded-lg border" placeholder="Нова тема" value={newTopic} onChange={e => setNewTopic(e.target.value)} />
-                            <button onClick={add} className="bg-blue-600 text-white px-4 rounded-lg font-bold">Додати</button>
+                    <div className="space-y-3">
+                        {topics.map(t => {
+                            // FIX: Check if user exists before accessing _mongoId
+                            const myUser = user && user._mongoId && t.users?.some(u => u.userId === String(user._mongoId));
+                            
+                            return (
+                                <div key={t._id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative">
+                                    <div className="pr-8">
+                                        <p className="font-medium text-gray-800 text-lg">{t.title}</p>
+                                        {t.users?.length > 0 && (
+                                            <div className="mt-2 flex flex-wrap gap-1">
+                                                {t.users.map((u, idx) => (
+                                                    <span key={idx} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">{u.userName}</span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    <button onClick={() => toggle(t)} className={`mt-3 w-full py-2 rounded-lg font-bold text-sm ${myUser ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                                        {myUser ? 'Звільнити тему' : 'Зайняти тему'}
+                                    </button>
+
+                                    {isAdmin && (
+                                        <div className="absolute top-2 right-2 flex gap-1">
+                                            <button onClick={() => { setEditTopic(t); setTitle(t.title); setIsModalOpen(true); }} className="text-gray-400 p-1"><Icons.Edit /></button>
+                                            <button onClick={() => del(t._id)} className="text-gray-400 p-1"><Icons.Trash /></button>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-sm rounded-2xl p-5">
+                                <h3 className="font-bold mb-2">{editTopic ? 'Редагувати' : 'Нова тема'}</h3>
+                                <textarea className="w-full p-2 border rounded-lg mb-4" rows="3" value={title} onChange={e => setTitle(e.target.value)}></textarea>
+                                <div className="flex gap-2">
+                                    <button onClick={save} className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">Зберегти</button>
+                                    <button onClick={() => setIsModalOpen(false)} className="px-4 bg-gray-100 rounded-lg">Скасувати</button>
+                                </div>
+                            </div>
                         </div>
                     )}
-
-                    <div className="space-y-2">
-                        {topics.map(t => (
-                            <div key={t._id} className="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center shadow-sm">
-                                <div className="flex-1">
-                                    <p className="font-medium text-gray-800">{t.title}</p>
-                                    {t.userName && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">{t.userName}</span>}
-                                </div>
-                                <button onClick={() => toggle(t)} className={`px-4 py-2 rounded-lg font-bold text-sm ${t.userId === String(user._mongoId) ? 'bg-red-100 text-red-600' : t.userId ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-100 text-blue-600'}`}>
-                                    {t.userId === String(user._mongoId) ? 'Звільнити' : t.userId ? 'Зайнято' : 'Зайняти'}
-                                </button>
-                            </div>
-                        ))}
-                    </div>
                 </div>
             );
         }
         
         function Homework({ subject, user, isAdmin, onBack }) {
             const [hw, setHw] = useState([]);
-            const [text, setText] = useState('');
-            const [date, setDate] = useState('');
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editHw, setEditHw] = useState(null);
+            const [form, setForm] = useState({ text: '', deadline: '' });
             
+            // FIX: Handle null subject
+            if (!subject) return <div className="p-10 text-center"><button onClick={onBack}>Назад</button></div>;
+
             const load = () => fetch(`${API}/homework/${subject._id}`).then(r => r.json()).then(setHw);
             useEffect(() => { load(); }, []);
 
-            const add = async () => {
-                await fetch(`${API}/homework`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ subjectId: subject._id, text, deadline: date, authorId: user.id }) });
-                setText(''); setDate(''); load();
+            const save = async () => {
+                const url = editHw ? `${API}/homework/${editHw._id}` : `${API}/homework`;
+                const method = editHw ? 'PUT' : 'POST';
+                const body = { ...form, subjectId: subject._id, adminId: user.id, authorId: user.id };
+                await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+                setIsModalOpen(false); load();
             };
 
             const del = async (id) => {
-                await fetch(`${API}/homework/${id}?adminId=${user.id}`, { method: 'DELETE' });
-                load();
+                if(confirm('Видалити?')) {
+                    await fetch(`${API}/homework/${id}?adminId=${user.id}`, { method: 'DELETE' });
+                    load();
+                }
             };
 
             return (
                 <div className="min-h-screen bg-gray-50 p-4 animate-enter pb-24">
-                     <div className="flex gap-3 mb-4 items-center">
-                        <button onClick={onBack}><Icons.ArrowLeft /></button>
-                        <h1 className="font-bold text-xl">Домашка</h1>
-                    </div>
-                    
-                    <div className="bg-white p-4 rounded-xl shadow-sm mb-6">
-                        <h3 className="font-bold mb-2">Додати завдання</h3>
-                        <textarea className="w-full p-2 border rounded-lg mb-2 text-sm" placeholder="Що задали?" value={text} onChange={e => setText(e.target.value)}></textarea>
-                        <div className="flex gap-2">
-                            <input type="date" className="p-2 border rounded-lg text-sm" value={date} onChange={e => setDate(e.target.value)} />
-                            <button onClick={add} className="flex-1 bg-black text-white rounded-lg font-bold">Додати</button>
+                     <div className="flex gap-3 mb-4 items-center justify-between">
+                        <div className="flex gap-2 items-center">
+                            <button onClick={onBack}><Icons.ArrowLeft /></button>
+                            <h1 className="font-bold text-xl">Домашка</h1>
                         </div>
+                        <button onClick={() => { setEditHw(null); setForm({text:'', deadline:''}); setIsModalOpen(true); }} className="bg-black text-white px-3 py-1 rounded-lg text-sm font-bold">+ Додати</button>
                     </div>
 
                     <div className="space-y-3">
                         {hw.map(h => (
                             <div key={h._id} className="bg-white p-4 rounded-xl border border-gray-200 relative">
                                 <p className="text-gray-800 whitespace-pre-wrap">{h.text}</p>
-                                <div className="flex justify-between items-center mt-3">
-                                    <span className="text-xs font-bold bg-red-50 text-red-500 px-2 py-1 rounded">Дедлайн: {h.deadline || 'Без дати'}</span>
-                                    {isAdmin && <button onClick={() => del(h._id)} className="text-red-400 text-xs font-bold">Видалити</button>}
+                                <div className="flex justify-between items-center mt-3 pt-3 border-t border-dashed">
+                                    <span className="text-xs font-bold bg-red-50 text-red-500 px-2 py-1 rounded">Дедлайн: {h.deadline || 'Не вказано'}</span>
+                                    {isAdmin && (
+                                        <div className="flex gap-2">
+                                             <button onClick={() => { setEditHw(h); setForm({text: h.text, deadline: h.deadline}); setIsModalOpen(true); }} className="text-blue-400 text-xs font-bold">Ред.</button>
+                                             <button onClick={() => del(h._id)} className="text-red-400 text-xs font-bold">Вид.</button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}
                     </div>
+
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-sm rounded-2xl p-5">
+                                <h3 className="font-bold mb-2">{editHw ? 'Редагувати' : 'Нове завдання'}</h3>
+                                <textarea className="w-full p-2 border rounded-lg mb-2 text-sm" rows="4" placeholder="Що задали?" value={form.text} onChange={e => setForm({...form, text: e.target.value})}></textarea>
+                                <input type="date" className="w-full p-2 border rounded-lg text-sm mb-4" value={form.deadline} onChange={e => setForm({...form, deadline: e.target.value})} />
+                                <div className="flex gap-2">
+                                    <button onClick={save} className="flex-1 bg-black text-white py-2 rounded-lg font-bold">Зберегти</button>
+                                    <button onClick={() => setIsModalOpen(false)} className="px-4 bg-gray-100 rounded-lg">Скасувати</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )
         }
 
         function Schedule({ onNavigate }) {
             const [schedule, setSchedule] = useState(null);
+            const [error, setError] = useState(null);
             const [week, setWeek] = useState(1);
             const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
             const dayNames = { Monday: 'Понеділок', Tuesday: 'Вівторок', Wednesday: 'Середа', Thursday: 'Четвер', Friday: "П'ятниця" };
 
-            useEffect(() => { fetch(`${API}/schedule`).then(r => r.json()).then(setSchedule); }, []);
+            useEffect(() => { 
+                fetch(`${API}/schedule`)
+                    .then(r => r.json())
+                    .then(data => {
+                        // Check if data is valid
+                        if(data && data.scheduleFirstWeek) setSchedule(data);
+                        else setError('Дані розкладу не отримано. Перевірте підключення до API.');
+                    })
+                    .catch(e => setError('Помилка завантаження розкладу.')); 
+            }, []);
             
-            if(!schedule) return <div className="p-10 text-center">Завантаження...</div>;
+            if(error) return <div className="p-10 text-center text-red-500 font-bold">{error}</div>;
+            if(!schedule) return <div className="p-10 text-center">Завантаження розкладу...</div>;
 
             return (
                 <div className="p-4 pb-24 animate-enter">
@@ -432,80 +589,107 @@
             );
         }
 
+        // --- ROOT APP ---
         function App() {
-            const [view, setView] = useState('home');
-            const [stack, setStack] = useState([]);
+            // Initial state: just home
+            const [history, setHistory] = useState([{ view: 'home', data: null }]);
             const [user, setUser] = useState(null);
             
-            // ADMIN IDS HARDCODED FOR FRONTEND UI TOGGLE (Security is on backend)
+            // ADMIN IDS
             const ADMIN_IDS = [1876094081, 1117478810]; 
 
             useEffect(() => {
-                const tg = window.Telegram?.WebApp;
                 if(tg) {
-                    tg.ready(); tg.expand();
+                    tg.ready(); 
+                    tg.expand();
                     const u = tg.initDataUnsafe?.user;
                     if(u) {
-                        setUser({...u, _mongoId: null}); // _mongoId will be fetched logic implies
-                        // Update user in DB
-                        fetch(`${API}/users/update`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ telegramId: u.id, fullName: `${u.first_name} ${u.last_name||''}`.trim(), username: u.username }) });
-                        // Hack to get mongo ID for comparison
-                        fetch(`${API}/queues/subject/dummy`).then(r => r.json()).then(() => {}); 
+                        // 1. Update user in DB
+                        fetch(`${API}/users/update`, { 
+                            method: 'POST', 
+                            headers: {'Content-Type': 'application/json'}, 
+                            body: JSON.stringify({ telegramId: u.id, fullName: `${u.first_name} ${u.last_name||''}`.trim(), username: u.username }) 
+                        });
+                        
+                        // 2. Fetch all users to find my _mongoId (needed for Topics logic)
+                        // In production, you'd use a /me endpoint, but this works for small groups.
+                        fetch(`${API}/users`).then(r => r.json()).then(users => {
+                            const found = users.find(x => x.telegramId === u.id);
+                            if(found) setUser({ ...u, _mongoId: found._id });
+                            else setUser({ ...u, _mongoId: null }); 
+                        });
                     }
                 } else {
                     // Dev mock
-                    setUser({ id: 1876094081, first_name: "Admin", _mongoId: "dev" });
+                    setUser({ id: 1876094081, first_name: "Admin", _mongoId: "dev_id" });
                 }
             }, []);
 
-            const navigate = (v, data) => {
-                if(v === 'search_subject') {
-                    // Find subject logic would go here, simplified to just alert for now
-                    // Ideally: fetch subjects, find by name, go to details
+            // --- NAVIGATION LOGIC ---
+            const active = history[history.length - 1];
+
+            const navigate = (view, data = null) => {
+                if(view === 'search_subject') {
                     fetch(`${API}/subjects`).then(r => r.json()).then(subs => {
-                        const found = subs.find(s => s.name.includes(data) || data.includes(s.name));
-                        if(found) navigate('details', found);
-                        else alert('Предмет не знайдено в базі даних додатку');
+                        const found = subs.find(s => s.name.toLowerCase().includes(data.toLowerCase()) || data.toLowerCase().includes(s.name.toLowerCase()));
+                        if(found) setHistory(prev => [...prev, { view: 'details', data: found }]);
+                        else alert('Предмет не знайдено в базі даних додатку. Створіть його спочатку в розділі "Предмети".');
                     });
                     return;
                 }
-                setStack([...stack, { view, data: stack.length ? stack[stack.length-1].data : null }]);
-                setView(v);
-                if(data) setStack(s => [...s.slice(0, -1), { view: v, data }]);
+                setHistory(prev => [...prev, { view, data }]);
             };
 
             const back = () => {
-                if(stack.length === 0) return;
-                const prev = stack.pop();
-                setStack([...stack]);
-                setView(prev.view);
+                if (history.length > 1) {
+                    setHistory(prev => prev.slice(0, -1));
+                }
             };
+            
+            const goToTab = (view) => {
+                // Reset history stack when switching main tabs
+                setHistory([{ view, data: null }]);
+            }
 
-            const currentData = stack.length && stack[stack.length-1]?.view === view ? stack[stack.length-1].data : null;
+            // Sync with Telegram Back Button
+            useEffect(() => {
+                if (!tg) return;
+                if (history.length > 1) {
+                    tg.BackButton.show();
+                    tg.BackButton.onClick(back);
+                } else {
+                    tg.BackButton.hide();
+                    tg.BackButton.offClick(back);
+                }
+                return () => tg.BackButton.offClick(back);
+            }, [history]);
+
             const isAdmin = user && ADMIN_IDS.includes(user.id);
 
             const render = () => {
-                switch(view) {
+                switch(active.view) {
                     case 'home': return <SubjectsList user={user} isAdmin={isAdmin} onNavigate={navigate} />;
-                    case 'details': return <SubjectDetails subject={currentData} user={user} isAdmin={isAdmin} onNavigate={navigate} onBack={back} />;
-                    case 'queue': return <Queue subject={currentData} user={user} isAdmin={isAdmin} onBack={back} />;
-                    case 'topics': return <Topics subject={currentData} user={user} isAdmin={isAdmin} onBack={back} />;
-                    case 'homework': return <Homework subject={currentData} user={user} isAdmin={isAdmin} onBack={back} />;
+                    case 'details': return <SubjectDetails subject={active.data} user={user} isAdmin={isAdmin} onNavigate={navigate} onBack={back} />;
+                    case 'queue': return <Queue subject={active.data} user={user} isAdmin={isAdmin} onBack={back} />;
+                    case 'topics': return <Topics subject={active.data} user={user} isAdmin={isAdmin} onBack={back} />;
+                    case 'homework': return <Homework subject={active.data} user={user} isAdmin={isAdmin} onBack={back} />;
                     case 'schedule': return <Schedule onNavigate={navigate} />;
                     default: return <SubjectsList />;
                 }
             };
 
             return (
-                <div className="max-w-md mx-auto min-h-screen font-sans text-gray-900">
+                <div className="max-w-md mx-auto min-h-screen font-sans text-gray-900 pb-20">
                     {render()}
-                    {stack.length === 0 && (
+                    
+                    {/* Bottom Nav - Only show on main tabs */}
+                    {history.length === 1 && (
                         <div className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-2 pb-6 z-50">
-                            <button onClick={() => setView('home')} className={`flex flex-col items-center p-2 rounded-xl w-20 transition ${view==='home'?'text-blue-600 bg-blue-50':'text-gray-400'}`}>
+                            <button onClick={() => goToTab('home')} className={`flex flex-col items-center p-2 rounded-xl w-20 transition ${active.view==='home'?'text-blue-600 bg-blue-50':'text-gray-400'}`}>
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
                                 <span className="text-[10px] font-bold mt-1">Предмети</span>
                             </button>
-                            <button onClick={() => setView('schedule')} className={`flex flex-col items-center p-2 rounded-xl w-20 transition ${view==='schedule'?'text-blue-600 bg-blue-50':'text-gray-400'}`}>
+                            <button onClick={() => goToTab('schedule')} className={`flex flex-col items-center p-2 rounded-xl w-20 transition ${active.view==='schedule'?'text-blue-600 bg-blue-50':'text-gray-400'}`}>
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                 <span className="text-[10px] font-bold mt-1">Розклад</span>
                             </button>
