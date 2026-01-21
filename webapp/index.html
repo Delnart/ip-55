@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>University App</title>
+    <title>Університетський помічник</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -20,9 +20,8 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect } = React;
         const API = '/api';
-        const tg = window.Telegram?.WebApp;
         
         // --- Icons ---
         const Icons = {
@@ -111,15 +110,7 @@
         }
 
         function SubjectDetails({ subject, user, isAdmin, onNavigate, onBack }) {
-            // FIX: Handle null subject
-            if (!subject) {
-                return (
-                    <div className="min-h-screen flex flex-col items-center justify-center p-4">
-                         <p className="text-gray-500 mb-4">Предмет не знайдено або дані втрачено.</p>
-                         <button onClick={onBack} className="bg-blue-100 text-blue-600 px-4 py-2 rounded-lg font-bold">Повернутися назад</button>
-                    </div>
-                );
-            }
+            if (!subject) return <div className="p-10 text-center"><button onClick={onBack} className="text-blue-500">Назад</button></div>;
 
             return (
                 <div className="min-h-screen bg-white animate-enter">
@@ -189,7 +180,6 @@
             const [searchUser, setSearchUser] = useState('');
             const [targetSlot, setTargetSlot] = useState(null);
 
-            // FIX: Handle null subject
             if (!subject) return <div className="p-10 text-center"><button onClick={onBack}>Назад</button></div>;
 
             const load = async () => {
@@ -371,7 +361,6 @@
             const [editTopic, setEditTopic] = useState(null);
             const [title, setTitle] = useState('');
 
-            // FIX: Handle null subject or user
             if (!subject) return <div className="p-10 text-center"><button onClick={onBack}>Назад</button></div>;
 
             const load = () => fetch(`${API}/topics/${subject._id}`).then(r => r.json()).then(setTopics);
@@ -409,7 +398,6 @@
                     
                     <div className="space-y-3">
                         {topics.map(t => {
-                            // FIX: Check if user exists before accessing _mongoId
                             const myUser = user && user._mongoId && t.users?.some(u => u.userId === String(user._mongoId));
                             
                             return (
@@ -462,7 +450,6 @@
             const [editHw, setEditHw] = useState(null);
             const [form, setForm] = useState({ text: '', deadline: '' });
             
-            // FIX: Handle null subject
             if (!subject) return <div className="p-10 text-center"><button onClick={onBack}>Назад</button></div>;
 
             const load = () => fetch(`${API}/homework/${subject._id}`).then(r => r.json()).then(setHw);
@@ -527,13 +514,13 @@
             )
         }
 
-        function Schedule() {
+        function Schedule({ onNavigate }) {
             const [schedule, setSchedule] = useState(null);
             const [week, setWeek] = useState(1);
             const [error, setError] = useState(null);
 
             useEffect(() => { 
-                fetch(`${API_BASE}/schedule`)
+                fetch(`${API}/schedule`)
                     .then(r => r.json())
                     .then(data => {
                         if(data) setSchedule(data);
@@ -542,8 +529,8 @@
                     .catch(() => setError('Помилка')); 
             }, []);
 
-            if (error) return <div className="p-10 text-center text-red-500">{error}</div>;
-            if (!schedule) return <div className="p-10 text-center">Завантаження...</div>;
+            if (error) return <div className="p-10 text-center text-red-500 font-bold">{error}</div>;
+            if (!schedule) return <div className="p-10 text-center">Завантаження розкладу...</div>;
 
             const weekKey = week === 1 ? 'scheduleFirstWeek' : 'scheduleSecondWeek';
             
@@ -563,11 +550,12 @@
             };
 
             return (
-                <div className="p-4 pb-24 animate-in">
-                    <div className="flex bg-gray-200 p-1 rounded-xl mb-6">
-                        <button onClick={() => setWeek(1)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${week === 1 ? 'bg-white shadow-sm' : 'text-gray-500'}`}>1 Тиждень</button>
-                        <button onClick={() => setWeek(2)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${week === 2 ? 'bg-white shadow-sm' : 'text-gray-500'}`}>2 Тиждень</button>
+                <div className="p-4 pb-24 animate-enter">
+                    <div className="flex bg-gray-200 p-1 rounded-xl mb-4">
+                        <button onClick={() => setWeek(1)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${week===1 ? 'bg-white shadow' : 'text-gray-500'}`}>1 Тиждень</button>
+                        <button onClick={() => setWeek(2)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${week===2 ? 'bg-white shadow' : 'text-gray-500'}`}>2 Тиждень</button>
                     </div>
+
                     <div className="space-y-6">
                         {daysOrder.map(dayCode => {
                             // Шукаємо день за кириличним ключем, який дає API
@@ -578,18 +566,20 @@
                             return (
                                 <div key={dayCode}>
                                     <h3 className="text-gray-400 font-bold uppercase text-xs mb-2 pl-1">{dayHeaders[dayCode]}</h3>
-                                    <div className="space-y-3">
+                                    <div className="space-y-2">
                                         {dayData.pairs.map((pair, idx) => {
                                             const isLec = pair.type.includes('Лек');
+                                            const isLab = pair.type.includes('Лаб');
+                                            const color = isLec ? 'border-purple-500' : isLab ? 'border-blue-500' : 'border-orange-500';
+                                            const bg = isLec ? 'bg-purple-50 text-purple-700' : isLab ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-700';
+                                            
                                             return (
-                                                <div key={idx} className={`p-4 rounded-xl border-l-4 ${isLec ? 'border-purple-500' : 'border-orange-500'} bg-white shadow-sm flex gap-4`}>
-                                                    <div className="flex flex-col items-center justify-center min-w-[50px] border-r border-gray-100 pr-4">
-                                                        <span className="font-bold text-gray-900 text-sm">{pair.time.substring(0, 5)}</span>
-                                                    </div>
+                                                <div key={idx} onClick={() => onNavigate('search_subject', pair.name)} className={`bg-white p-3 rounded-xl border-l-4 shadow-sm flex gap-3 ${color}`}>
+                                                    <div className="font-bold text-gray-900 w-12 text-sm pt-1">{pair.time.substring(0, 5)}</div>
                                                     <div>
-                                                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${isLec ? 'bg-purple-100 text-purple-700' : 'bg-orange-100 text-orange-700'}`}>{pair.type}</span>
-                                                        <h4 className="font-bold text-gray-800 leading-tight mt-1 mb-1">{pair.name}</h4>
-                                                        <p className="text-xs text-gray-500">👨‍🏫 {pair.teacherName}</p>
+                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${bg}`}>{pair.type}</span>
+                                                        <h4 className="font-bold text-gray-800 leading-tight my-1">{pair.name}</h4>
+                                                        <p className="text-xs text-gray-500">{pair.teacherName}</p>
                                                     </div>
                                                 </div>
                                             );
@@ -605,7 +595,6 @@
 
         // --- ROOT APP ---
         function App() {
-            // Initial state: just home
             const [history, setHistory] = useState([{ view: 'home', data: null }]);
             const [user, setUser] = useState(null);
             
@@ -613,20 +602,17 @@
             const ADMIN_IDS = [1876094081, 1117478810]; 
 
             useEffect(() => {
+                const tg = window.Telegram?.WebApp;
                 if(tg) {
-                    tg.ready(); 
-                    tg.expand();
+                    tg.ready(); tg.expand();
                     const u = tg.initDataUnsafe?.user;
                     if(u) {
-                        // 1. Update user in DB
                         fetch(`${API}/users/update`, { 
                             method: 'POST', 
                             headers: {'Content-Type': 'application/json'}, 
                             body: JSON.stringify({ telegramId: u.id, fullName: `${u.first_name} ${u.last_name||''}`.trim(), username: u.username }) 
                         });
                         
-                        // 2. Fetch all users to find my _mongoId (needed for Topics logic)
-                        // In production, you'd use a /me endpoint, but this works for small groups.
                         fetch(`${API}/users`).then(r => r.json()).then(users => {
                             const found = users.find(x => x.telegramId === u.id);
                             if(found) setUser({ ...u, _mongoId: found._id });
@@ -639,7 +625,6 @@
                 }
             }, []);
 
-            // --- NAVIGATION LOGIC ---
             const active = history[history.length - 1];
 
             const navigate = (view, data = null) => {
@@ -647,7 +632,7 @@
                     fetch(`${API}/subjects`).then(r => r.json()).then(subs => {
                         const found = subs.find(s => s.name.toLowerCase().includes(data.toLowerCase()) || data.toLowerCase().includes(s.name.toLowerCase()));
                         if(found) setHistory(prev => [...prev, { view: 'details', data: found }]);
-                        else alert('Предмет не знайдено в базі даних додатку. Створіть його спочатку в розділі "Предмети".');
+                        else alert('Предмет не знайдено. Створіть його спочатку в розділі "Предмети".');
                     });
                     return;
                 }
@@ -661,12 +646,11 @@
             };
             
             const goToTab = (view) => {
-                // Reset history stack when switching main tabs
                 setHistory([{ view, data: null }]);
             }
 
-            // Sync with Telegram Back Button
             useEffect(() => {
+                const tg = window.Telegram?.WebApp;
                 if (!tg) return;
                 if (history.length > 1) {
                     tg.BackButton.show();
@@ -696,7 +680,6 @@
                 <div className="max-w-md mx-auto min-h-screen font-sans text-gray-900 pb-20">
                     {render()}
                     
-                    {/* Bottom Nav - Only show on main tabs */}
                     {history.length === 1 && (
                         <div className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-2 pb-6 z-50">
                             <button onClick={() => goToTab('home')} className={`flex flex-col items-center p-2 rounded-xl w-20 transition ${active.view==='home'?'text-blue-600 bg-blue-50':'text-gray-400'}`}>
