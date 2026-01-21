@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Університетський помічник</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { -webkit-tap-highlight-color: transparent; }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow-x: hidden;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const API_BASE = 'https://your-backend-url.com/api';
+        
+        const Icons = {
+            Home: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+            Calendar: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+            Users: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+            Book: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+            Clipboard: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+        };
+        
+        function App() {
+            const [tab, setTab] = useState('home');
+            const [user, setUser] = useState(null);
+            const [subjects, setSubjects] = useState([]);
+            
+            useEffect(() => {
+                const tg = window.Telegram?.WebApp;
+                if (tg) {
+                    tg.ready();
+                    tg.expand();
+                    const u = tg.initDataUnsafe.user;
+                    if (u) {
+                        setUser({
+                            id: u.id,
+                            firstName: u.first_name,
+                            lastName: u.last_name,
+                            username: u.username
+                        });
+                    }
+                }
+                
+                const params = new URLSearchParams(window.location.search);
+                const t = params.get('tab');
+                if (t) setTab(t);
+                
+                fetch(`${API_BASE}/subjects`)
+                    .then(r => r.json())
+                    .then(d => setSubjects(d))
+                    .catch(console.error);
+            }, []);
+            
+            return (
+                <div className="min-h-screen bg-gray-50 pb-20">
+                    {tab === 'home' && <Home user={user} subjects={subjects} setTab={setTab} />}
+                    {tab === 'schedule' && <Schedule />}
+                    {tab === 'queues' && <Queues user={user} subjects={subjects} />}
+                    {tab === 'topics' && <Topics user={user} subjects={subjects} />}
+                    {tab === 'homework' && <Homework user={user} />}
+                    
+                    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-50">
+                        <div className="flex justify-around h-16">
+                            {['home', 'schedule', 'queues', 'topics', 'homework'].map(t => (
+                                <button key={t} onClick={() => setTab(t)} className={`flex flex-col items-center justify-center flex-1 ${tab === t ? 'text-blue-600' : 'text-gray-500'}`}>
+                                    {Icons[t.charAt(0).toUpperCase() + t.slice(1).replace('queues', 'Users').replace('topics', 'Book').replace('homework', 'Clipboard')]()}
+                                    <span className="text-xs mt-1">{t === 'home' ? 'Головна' : t === 'schedule' ? 'Розклад' : t === 'queues' ? 'Черги' : t === 'topics' ? 'Теми' : 'Домашка'}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </nav>
+                </div>
+            );
+        }
+        
+        function Home({ user, subjects, setTab }) {
+            return (
+                <div className="p-4">
+                    <h1 className="text-2xl font-bold mb-4">Привіт, {user?.firstName || 'Студент'}!</h1>
+                    <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
+                        <h2 className="font-bold text-lg mb-3">Швидкий доступ</h2>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[
+                                { key: 'queues', label: 'Черги', color: 'blue', Icon: Icons.Users },
+                                { key: 'topics', label: 'Теми', color: 'green', Icon: Icons.Book },
+                                { key: 'schedule', label: 'Розклад', color: 'purple', Icon: Icons.Calendar },
+                                { key: 'homework', label: 'Домашка', color: 'orange', Icon: Icons.Clipboard }
+                            ].map(({ key, label, color, Icon }) => (
+                                <button key={key} onClick={() => setTab(key)} className={`bg-${color}-50 p-4 rounded-lg text-center hover:bg-${color}-100 transition`}>
+                                    <Icon />
+                                    <p className="text-sm font-medium mt-2">{label}</p>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {subjects.length > 0 && (
+                        <div className="bg-white rounded-xl shadow-sm p-4">
+                            <h2 className="font-bold text-lg mb-3">Дисципліни</h2>
+                            {subjects.map(s => (
+                                <div key={s._id} className="border-b last:border-0 py-3">
+                                    <p className="font-medium">{s.name}</p>
+                                    <p className="text-sm text-gray-500">{s.type}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+        
+        function Schedule() {
+            const [schedule, setSchedule] = useState(null);
+            const [week, setWeek] = useState(1);
+            const [day, setDay] = useState(null);
+            
+            useEffect(() => {
+                fetch('https://api.campus.kpi.ua/schedule/lessons?groupId=YOUR_GROUP_ID')
+                    .then(r => r.json())
+                    .then(d => setSchedule(d))
+                    .catch(console.error);
+            }, []);
+            
+            if (!schedule) return <div className="p-4 text-center">Завантаження...</div>;
+            
+            const weekKey = week === 1 ? 'scheduleFirstWeek' : 'scheduleSecondWeek';
+            const weekSch = schedule[weekKey] || [];
+            const days = [
+                { code: 'Пн', name: 'Понеділок' },
+                { code: 'Вв', name: 'Вівторок' },
+                { code: 'Ср', name: 'Середа' },
+                { code: 'Чт', name: 'Четвер' },
+                { code: 'Пт', name: "П'ятниця" }
+            ];
+            
+            if (day) {
+                const dayData = weekSch.find(d => d.day === day);
+                return (
+                    <div className="min-h-screen bg-gray-50">
+                        <div className="bg-white p-4 shadow-sm sticky top-0">
+                            <button onClick={() => setDay(null)} className="text-blue-600 mb-2">← Назад</button>
+                            <h1 className="font-bold text-xl">{days.find(d => d.code === day)?.name}</h1>
+                        </div>
+                        <div className="p-4 space-y-3">
+                            {dayData?.pairs?.map((p, i) => (
+                                <div key={i} className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-blue-500">
+                                    <div className="flex justify-between mb-2">
+                                        <h3 className="font-bold">{p.name}</h3>
+                                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">{p.time}</span>
+                                    </div>
+                                    <p className="text-sm text-gray-600">{p.teacherName}</p>
+                                    <p className="text-xs text-gray-500">{p.place}</p>
+                                </div>
+                            )) || <p className="text-center text-gray-400">Вихідний</p>}
+                        </div>
+                    </div>
+                );
+            }
+            
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    <div className="bg-white p-4 shadow-sm sticky top-0">
+                        <h1 className="font-bold text-2xl mb-3">Розклад</h1>
+                        <div className="flex gap-2">
+                            <button onClick={() => setWeek(1)} className={`flex-1 py-2 rounded-lg ${week === 1 ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>1 тиждень</button>
+                            <button onClick={() => setWeek(2)} className={`flex-1 py-2 rounded-lg ${week === 2 ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>2 тиждень</button>
+                        </div>
+                    </div>
+                    <div className="p-4 space-y-3">
+                        {days.map(d => {
+                            const dayData = weekSch.find(wd => wd.day === d.code);
+                            const cnt = dayData?.pairs?.length || 0;
+                            return (
+                                <button key={d.code} onClick={() => setDay(d.code)} className="w-full bg-white rounded-xl shadow-sm p-4 text-left">
+                                    <h3 className="font-bold text-lg">{d.name}</h3>
+                                    <p className="text-sm text-gray-500">{cnt > 0 ? `${cnt} пар` : 'Вихідний'}</p>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        }
+        
+        function Queues({ user, subjects }) {
+            const [selected, setSelected] = useState(null);
+            const qSubjects = subjects.filter(s => s.type === 'queue');
+            
+            if (selected) return <QueueDetail subject={selected} user={user} onBack={() => setSelected(null)} />;
+            
+            return (
+                <div className="p-4">
+                    <h1 className="text-2xl font-bold mb-4">Черги</h1>
+                    <div className="space-y-3">
+                        {qSubjects.map(s => (
+                            <button key={s._id} onClick={() => setSelected(s)} className="w-full bg-white rounded-xl shadow-sm p-4 text-left">
+                                <h3 className="font-bold">{s.name}</h3>
+                                <p className="text-sm text-gray-500">Натисніть щоб переглянути</p>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+        
+        function QueueDetail({ subject, user, onBack }) {
+            const [queue, setQueue] = useState(null);
+            const [labNum, setLabNum] = useState('');
+            const [joining, setJoining] = useState(false);
+            
+            useEffect(() => {
+                const load = () => {
+                    fetch(`${API_BASE}/queues/subject/${subject._id}`)
+                        .then(r => r.json())
+                        .then(d => setQueue(d))
+                        .catch(console.error);
+                };
+                load();
+                const i = setInterval(load, 5000);
+                return () => clearInterval(i);
+            }, [subject]);
+            
+            const join = async (pos) => {
+                if (!labNum) return alert('Введіть номер лаби');
+                try {
+                    await fetch(`${API_BASE}/queues/join`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            queueId: queue._id,
+                            telegramId: user.id,
+                            labNumber: parseInt(labNum),
+                            position: pos
+                        })
+                    });
+                    setLabNum('');
+                    setJoining(false);
+                } catch(e) {
+                    alert('Помилка');
+                }
+            };
+            
+            if (!queue) return <div className="p-4">Завантаження...</div>;
+            
+            const MAX = queue.config?.maxSlots || 31;
+            const myEntry = queue.entries?.find(e => e.user?.telegramId === user?.id);
+            
+            return (
+                <div className="min-h-screen bg-gray-50 pb-20">
+                    <div className="bg-white p-4 shadow-sm sticky top-0">
+                        <button onClick={onBack} className="text-blue-600 mb-2">← Назад</button>
+                        <h1 className="font-bold text-xl">{subject.name}</h1>
+                        <p className={`text-sm ${queue.isActive ? 'text-green-600' : 'text-red-500'}`}>
+                            {queue.isActive ? '🟢 Відкрито' : '🔴 Закрито'}
+                        </p>
+                    </div>
+                    
+                    <div className="p-4">
+                        <div className="bg-white rounded-xl shadow-sm p-4 mb-20">
+                            <h3 className="mb-4 font-bold">Місця ({MAX})</h3>
+                            <div className="grid grid-cols-3 gap-2">
+                                {Array.from({length: MAX}, (_, i) => i + 1).map(n => {
+                                    const e = queue.entries?.find(x => x.position === n);
+                                    const isMine = e?.user?.telegramId === user?.id;
+                                    return (
+                                        <div
+                                            key={n}
+                                            onClick={() => !e && join(n)}
+                                            className={`relative p-2 rounded-xl border-2 text-center min-h-28 flex flex-col items-center justify-center ${
+                                                e ? 'bg-blue-50 border-blue-200' : 'border-dashed border-gray-300 cursor-pointer'
+                                            } ${isMine ? 'ring-2 ring-blue-500' : ''}`}
+                                        >
+                                            <span className="absolute top-1 left-2 text-xs font-bold text-gray-400">#{n}</span>
+                                            {e ? (
+                                                <>
+                                                    <div className="w-10 h-10 rounded-full bg-gray-200 mb-1 flex items-center justify-center font-bold">
+                                                        {e.user?.fullName?.charAt(0) || '?'}
+                                                    </div>
+                                                    <span className="text-xs font-bold">{e.user?.fullName || 'Студент'}</span>
+                                                    <span className="text-xs bg-white px-2 py-0.5 rounded mt-1">Лаб {e.labNumber}</span>
+                                                </>
+                                            ) : (
+                                                <div className="opacity-50">
+                                                    <span className="text-blue-500 font-bold text-xl">+</span>
+                                                    <p className="text-xs text-gray-400">Вільно</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t">
+                        {myEntry ? (
+                            <div className="flex gap-2">
+                                <div className="flex-1 bg-blue-50 p-3 rounded-xl flex items-center justify-between">
+                                    <span className="text-xs font-bold text-blue-400">МІСЦЕ</span>
+                                    <span className="text-2xl font-black">{myEntry.position}</span>
+                                </div>
+                                <button className="px-6 bg-red-100 text-red-600 rounded-xl font-bold">Вийти</button>
+                            </div>
+                        ) : joining ? (
+                            <div className="flex gap-2">
+                                <input type="number" min="1" placeholder="№ лаби" className="w-24 p-3 bg-gray-100 rounded-xl text-center font-bold" value={labNum} onChange={e => setLabNum(e.target.value)} />
+                                <button onClick={() => join()} className="flex-1 bg-green-600 text-white font-bold rounded-xl">Зайняти</button>
+                                <button onClick={() => setJoining(false)} className="px-4 bg-gray-100 rounded-xl">✕</button>
+                            </div>
+                        ) : (
+                            <button onClick={() => setJoining(true)} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold">Записатись</button>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+        
+        function Topics({ user, subjects }) {
+            return (
+                <div className="p-4">
+                    <h1 className="text-2xl font-bold mb-4">Теми рефератів</h1>
+                    <p className="text-gray-500">В розробці...</p>
+                </div>
+            );
+        }
+        
+        function Homework({ user }) {
+            const [hw, setHw] = useState([]);
+            const [newHw, setNewHw] = useState({ subject: '', description: '', deadline: '' });
+            
+            useEffect(() => {
+                fetch(`${API_BASE}/homework`)
+                    .then(r => r.json())
+                    .then(d => setHw(d))
+                    .catch(console.error);
+            }, []);
+            
+            const add = async () => {
+                if (!newHw.subject || !newHw.description) return alert('Заповніть поля');
+                try {
+                    await fetch(`${API_BASE}/homework`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newHw)
+                    });
+                    setNewHw({ subject: '', description: '', deadline: '' });
+                    const r = await fetch(`${API_BASE}/homework`);
+                    setHw(await r.json());
+                } catch(e) {
+                    alert('Помилка');
+                }
+            };
+            
+            return (
+                <div className="p-4">
+                    <h1 className="text-2xl font-bold mb-4">Домашні завдання</h1>
+                    
+                    <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
+                        <h2 className="font-bold mb-3">Додати</h2>
+                        <input type="text" placeholder="Предмет" className="w-full p-3 bg-gray-50 rounded-lg mb-2" value={newHw.subject} onChange={e => setNewHw({...newHw, subject: e.target.value})} />
+                        <textarea placeholder="Опис" className="w-full p-3 bg-gray-50 rounded-lg mb-2" rows={3} value={newHw.description} onChange={e => setNewHw({...newHw, description: e.target.value})} />
+                        <input type="date" className="w-full p-3 bg-gray-50 rounded-lg mb-3" value={newHw.deadline} onChange={e => setNewHw({...newHw, deadline: e.target.value})} />
+                        <button onClick={add} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold">Додати</button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                        {hw.map(h => (
+                            <div key={h._id} className="bg-white rounded-xl shadow-sm p-4">
+                                <h3 className="font-bold">{h.subject}</h3>
+                                <p className="text-sm text-gray-600 mt-1">{h.description}</p>
+                                {h.deadline && <p className="text-xs text-blue-600 mt-2">Дедлайн: {h.deadline}</p>}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+        
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

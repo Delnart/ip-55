@@ -7,7 +7,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from database.connection import db
-from bot.handlers import admin, schedule, group
+from bot.handlers import admin, schedule, group, webapp
 from bot.middlewares.auth import AuthMiddleware
 from bot.utils.scheduler import NotificationScheduler
 from config import BOT_TOKEN, GROUP_ID
@@ -28,22 +28,9 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-async def debug_message(message):
-    """Діагностична функція для логування всіх повідомлень"""
-    logger.info(f"MESSAGE: '{message.text}' from {message.from_user.username} in chat {message.chat.id} (type: {message.chat.type})")
-    logger.info(f"EXPECTED GROUP_ID: {GROUP_ID}")
-    logger.info(f"MATCH: {message.chat.id == GROUP_ID}")
-    
-    print(f"\n=== ПОВІДОМЛЕННЯ ===")
-    print(f"Текст: {message.text}")
-    print(f"Chat ID: {message.chat.id}")
-    print(f"Очікуваний GROUP_ID: {GROUP_ID}")
-    print(f"Співпадає: {message.chat.id == GROUP_ID}")
-    print(f"Тип чату: {message.chat.type}")
-    print("===================\n")
-
 async def handle(request):
     return web.Response(text="Bot is running!")
+
 async def start_web_server():
     app = web.Application()
     app.router.add_get('/', handle)
@@ -55,9 +42,9 @@ async def start_web_server():
     logging.info(f"Web server started on port {port}")
 
 async def main():
-    """Головна функція запуску бота"""
     try:
         await start_web_server()
+        
         bot = Bot(
             token=BOT_TOKEN,
             default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN)
@@ -65,11 +52,13 @@ async def main():
         
         dp = Dispatcher()
         
+        dp.include_router(webapp.router)
+        
         dp.include_router(admin.router)
         admin.router.message.middleware(AuthMiddleware())
         admin.router.callback_query.middleware(AuthMiddleware())
         
-        dp.include_router(group.router)  
+        dp.include_router(group.router)
         
         dp.include_router(schedule.router)
         schedule.router.message.middleware(AuthMiddleware())
