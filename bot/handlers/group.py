@@ -1,19 +1,22 @@
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.types import Message, ChatMemberUpdated, CallbackQuery
 from aiogram.filters import ChatMemberUpdatedFilter, KICKED, LEFT, MEMBER, ADMINISTRATOR, CREATOR, Command
+from aiogram.enums import ChatMemberStatus
 from database.models import GroupMembersManager, LinksManager
 from config import GROUP_ID, ADMIN_IDS, TIMEZONE
 import logging
 from datetime import datetime
 import pytz
 import asyncio
-from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
-from aiogram.utils.markdown import escape_md
 
 logger = logging.getLogger(__name__)
 router = Router()
-
+def escape_md(text: str) -> str:
+    """Escapes special characters for Legacy Markdown."""
+    if not text:
+        return ""
+    return text.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
 @router.chat_member(ChatMemberUpdatedFilter(member_status_changed=KICKED | LEFT))
 async def on_user_leave(event: ChatMemberUpdated):
     """Коли користувач покидає групу"""
