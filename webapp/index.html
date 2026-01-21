@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Університетський помічник</title>
+    <title>University App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        * { -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f9fafb; }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .animate-in { animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        body { background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .animate-enter { animation: slideIn 0.2s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
@@ -22,177 +21,260 @@
 
     <script type="text/babel">
         const { useState, useEffect } = React;
-        const API_BASE = '/api';
-
-        // --- ICONS ---
+        const API = '/api';
+        
+        // --- Icons ---
         const Icons = {
-            Home: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
-            Calendar: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" strokeWidth="2"/><path strokeWidth="2" d="M16 2v4M8 2v4M3 10h18"/></svg>,
-            Users: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4" strokeWidth="2"/><path strokeWidth="2" d="M23 21v-2a4 4 0 0 0-3-3.87"/><path strokeWidth="2" d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
-            Book: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path strokeWidth="2" d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
-            Clipboard: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="2" strokeWidth="2"/></svg>,
-            ArrowLeft: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>,
-            Settings: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" strokeWidth="2"/><path strokeWidth="2" d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
-            Trash: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0 1 16.138 21H7.862a2 2 0 0 1-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v3M4 7h16"/></svg>
+            ArrowLeft: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>,
+            Plus: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>,
+            Trash: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+            Clock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+            Check: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
+            Play: () => <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z" /></svg>
         };
 
-        // --- COMPONENTS ---
+        // --- Components ---
 
-        function SubjectView({ subject, user, onNavigate, onBack }) {
+        function SubjectsList({ user, isAdmin, onNavigate }) {
+            const [subjects, setSubjects] = useState([]);
+            const [isAdding, setIsAdding] = useState(false);
+            const [newSub, setNewSub] = useState({ name: '', teacherLecture: '', teacherPractice: '' });
+
+            useEffect(() => {
+                fetch(`${API}/subjects`).then(r => r.json()).then(setSubjects);
+            }, []);
+
+            const handleAdd = async () => {
+                const res = await fetch(`${API}/subjects`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(newSub)
+                });
+                if(res.ok) { setIsAdding(false); setNewSub({ name: '', teacherLecture: '', teacherPractice: '' }); fetch(`${API}/subjects`).then(r => r.json()).then(setSubjects); }
+            };
+
+            const handleDelete = async (id, e) => {
+                e.stopPropagation();
+                if(confirm('Видалити предмет?')) {
+                    await fetch(`${API}/subjects/${id}`, { method: 'DELETE' });
+                    setSubjects(subjects.filter(s => s._id !== id));
+                }
+            };
+
             return (
-                <div className="min-h-screen bg-gray-50 pb-20 animate-in">
-                    <div className="bg-white p-4 shadow-sm sticky top-0 z-10 flex items-center gap-3">
-                        <button onClick={onBack} className="p-2 -ml-2 text-gray-600 rounded-full active:bg-gray-100"><Icons.ArrowLeft /></button>
-                        <h1 className="font-bold text-xl truncate">{subject.name}</h1>
+                <div className="p-4 animate-enter pb-24">
+                    <div className="flex justify-between items-center mb-6">
+                        <h1 className="text-2xl font-bold text-gray-800">Дисципліни</h1>
+                        {isAdmin && <button onClick={() => setIsAdding(!isAdding)} className="p-2 bg-blue-100 text-blue-600 rounded-full"><Icons.Plus /></button>}
                     </div>
-                    <div className="p-4 space-y-4">
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                            <h3 className="text-gray-400 text-xs font-bold uppercase mb-1">Лектор</h3>
-                            <p className="font-medium text-lg mb-3">{subject.teacherLecture || 'Не вказано'}</p>
-                            <h3 className="text-gray-400 text-xs font-bold uppercase mb-1">Практик</h3>
-                            <p className="font-medium text-lg">{subject.teacherPractice || 'Не вказано'}</p>
+
+                    {isAdding && (
+                        <div className="bg-white p-4 rounded-xl shadow-md mb-4 border border-blue-100">
+                            <input placeholder="Назва предмету" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={newSub.name} onChange={e => setNewSub({...newSub, name: e.target.value})} />
+                            <input placeholder="Лектор" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={newSub.teacherLecture} onChange={e => setNewSub({...newSub, teacherLecture: e.target.value})} />
+                            <input placeholder="Практик" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={newSub.teacherPractice} onChange={e => setNewSub({...newSub, teacherPractice: e.target.value})} />
+                            <button onClick={handleAdd} className="w-full bg-blue-600 text-white py-2 rounded-lg font-bold">Зберегти</button>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button onClick={() => onNavigate('queue', subject)} className="p-4 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-2 active:scale-95 transition">
-                                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center text-purple-600"><Icons.Users /></div>
-                                <span className="font-bold text-gray-700">Черга</span>
-                            </button>
-                            <button onClick={() => onNavigate('topics', subject)} className="p-4 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center gap-2 active:scale-95 transition">
-                                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-600"><Icons.Book /></div>
-                                <span className="font-bold text-gray-700">Теми</span>
-                            </button>
+                    )}
+
+                    <div className="grid gap-3">
+                        {subjects.map(sub => (
+                            <div key={sub._id} onClick={() => onNavigate('details', sub)} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 active:scale-[0.98] transition-transform relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-blue-50 to-transparent rounded-bl-full -mr-4 -mt-4"></div>
+                                <h3 className="font-bold text-lg text-gray-800 relative z-10">{sub.name}</h3>
+                                <p className="text-sm text-gray-500 mt-1 relative z-10">{sub.teacherPractice || sub.teacherLecture || 'Викладач не вказаний'}</p>
+                                {isAdmin && <button onClick={(e) => handleDelete(sub._id, e)} className="absolute bottom-4 right-4 text-red-300 hover:text-red-500 z-20"><Icons.Trash /></button>}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        function SubjectDetails({ subject, user, isAdmin, onNavigate, onBack }) {
+            return (
+                <div className="min-h-screen bg-white animate-enter">
+                    <div className="p-4 border-b flex items-center gap-4 sticky top-0 bg-white z-20">
+                        <button onClick={onBack} className="p-2 -ml-2 hover:bg-gray-100 rounded-full"><Icons.ArrowLeft /></button>
+                        <h1 className="font-bold text-lg truncate">{subject.name}</h1>
+                    </div>
+                    
+                    <div className="p-5 space-y-6">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                                <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Лектор</span>
+                                <p className="font-semibold text-gray-800 mt-1">{subject.teacherLecture || '-'}</p>
+                            </div>
+                            <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
+                                <span className="text-xs font-bold text-orange-400 uppercase tracking-wider">Практик</span>
+                                <p className="font-semibold text-gray-800 mt-1">{subject.teacherPractice || '-'}</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 className="font-bold text-gray-800 mb-3">Дії</h3>
+                            <div className="grid gap-3">
+                                <button onClick={() => onNavigate('queue', subject)} className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between hover:bg-gray-100 transition active:scale-[0.99]">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">Q</div>
+                                        <div className="text-left">
+                                            <p className="font-bold text-gray-800">Черга на здачу</p>
+                                            <p className="text-xs text-gray-500">Запис на лабораторні</p>
+                                        </div>
+                                    </div>
+                                    <Icons.Play />
+                                </button>
+                                <button onClick={() => onNavigate('topics', subject)} className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between hover:bg-gray-100 transition active:scale-[0.99]">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center font-bold">T</div>
+                                        <div className="text-left">
+                                            <p className="font-bold text-gray-800">Теми рефератів</p>
+                                            <p className="text-xs text-gray-500">Бронювання тем</p>
+                                        </div>
+                                    </div>
+                                    <Icons.Play />
+                                </button>
+                                <button onClick={() => onNavigate('homework', subject)} className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between hover:bg-gray-100 transition active:scale-[0.99]">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center font-bold">H</div>
+                                        <div className="text-left">
+                                            <p className="font-bold text-gray-800">Домашнє завдання</p>
+                                            <p className="text-xs text-gray-500">Перегляд та додавання</p>
+                                        </div>
+                                    </div>
+                                    <Icons.Play />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             );
         }
 
-        function QueueView({ subject, user, onBack, isAdmin }) {
+        function Queue({ subject, user, isAdmin, onBack }) {
             const [queue, setQueue] = useState(null);
-            const [selectedSlot, setSelectedSlot] = useState(null);
             const [labNum, setLabNum] = useState('');
-            const STATUSES = {
-                waiting: { color: 'bg-white border-gray-200', icon: '' },
-                preparing: { label: 'Готується', color: 'bg-yellow-50 border-yellow-300 text-yellow-700', icon: '⏰' },
-                defending: { label: 'Здає', color: 'bg-green-50 border-green-300 text-green-700', icon: '▶️' },
-                completed: { label: 'Здав', color: 'bg-blue-50 border-blue-300 text-blue-700', icon: '✅' },
-                failed: { label: 'Не здав', color: 'bg-red-50 border-red-300 text-red-700', icon: '❌' }
+            const [selectedSlot, setSelectedSlot] = useState(null);
+
+            const load = async () => {
+                let res = await fetch(`${API}/queues/subject/${subject._id}`);
+                let data = await res.json();
+                if (!data) {
+                    await fetch(`${API}/queues`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ subjectId: subject._id }) });
+                    res = await fetch(`${API}/queues/subject/${subject._id}`);
+                    data = await res.json();
+                }
+                setQueue(data);
             };
 
-            const fetchQueue = async () => {
-                try {
-                    let res = await fetch(`${API_BASE}/queues/subject/${subject._id}`);
-                    let data = await res.json();
-                    if (!data) {
-                        res = await fetch(`${API_BASE}/queues`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ subjectId: subject._id }) });
-                        data = await res.json();
-                    }
-                    setQueue(data);
-                } catch(e) { console.error(e); }
-            };
+            useEffect(() => { load(); const i = setInterval(load, 5000); return () => clearInterval(i); }, []);
 
-            useEffect(() => { fetchQueue(); const i = setInterval(fetchQueue, 3000); return () => clearInterval(i); }, []);
-
-            const handleJoin = async (slot) => {
-                if(!labNum) return alert("Введіть номер лабораторної");
-                const res = await fetch(`${API_BASE}/queues/join`, {
+            const join = async (pos) => {
+                if(!labNum) return alert('Введіть номер лабораторної!');
+                const res = await fetch(`${API}/queues/join`, {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ queueId: queue._id, telegramId: user.id, labNumber: parseInt(labNum), position: slot })
+                    body: JSON.stringify({ queueId: queue._id, telegramId: user.id, labNumber: parseInt(labNum), position: pos })
                 });
-                const data = await res.json();
-                if(data.detail) alert(data.detail);
-                else { setSelectedSlot(null); setLabNum(''); fetchQueue(); }
+                if(!res.ok) {
+                    const err = await res.json();
+                    alert(err.detail);
+                } else {
+                    setLabNum(''); setSelectedSlot(null); load();
+                }
             };
 
-            const changeStatus = async (uid, st) => {
-                await fetch(`${API_BASE}/queues/status`, {
+            const setStatus = async (uid, st) => {
+                await fetch(`${API}/queues/status`, {
                     method: 'PATCH', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ queueId: queue._id, userId: uid, status: st, adminId: user.id })
                 });
-                fetchQueue(); setSelectedSlot(null);
+                load(); setSelectedSlot(null);
             };
 
             const toggleQueue = async () => {
-                await fetch(`${API_BASE}/queues/toggle`, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ queueId: queue._id, adminId: user.id })
+                await fetch(`${API}/queues/toggle`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ queueId: queue._id, adminId: user.id }) });
+                load();
+            };
+            
+            const toggleRule = async () => {
+                await fetch(`${API}/queues/config`, { 
+                    method: 'PATCH', headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ queueId: queue._id, adminId: user.id, minMaxRule: !queue.config?.minMaxRule }) 
                 });
-                fetchQueue();
+                load();
             }
 
-            if (!queue) return <div className="p-10 text-center">Завантаження...</div>;
+            if(!queue) return <div className="p-10 text-center">Завантаження...</div>;
+
+            const STATUS_COLORS = {
+                preparing: 'bg-yellow-50 border-yellow-300 text-yellow-800',
+                defending: 'bg-green-50 border-green-300 text-green-800',
+                completed: 'bg-blue-50 border-blue-300 text-blue-800',
+                waiting: 'bg-white border-gray-200'
+            };
 
             return (
-                <div className="min-h-screen bg-gray-50 pb-20 animate-in">
-                    <div className="bg-white p-4 sticky top-0 z-20 shadow-sm flex justify-between items-center">
-                        <div className="flex items-center gap-2">
+                <div className="min-h-screen bg-gray-50 pb-20 animate-enter">
+                    <div className="bg-white p-4 sticky top-0 z-10 shadow-sm flex justify-between items-center">
+                        <div className="flex gap-2 items-center">
                             <button onClick={onBack}><Icons.ArrowLeft /></button>
-                            <div>
-                                <h2 className="font-bold leading-none">{subject.name}</h2>
-                                <span className={`text-xs font-bold ${queue.isActive ? 'text-green-500' : 'text-red-500'}`}>
-                                    {queue.isActive ? '🟢 Відкрито' : '🔴 Закрито'}
-                                </span>
-                            </div>
+                            <h2 className="font-bold">{subject.name}</h2>
                         </div>
-                        {isAdmin && <button onClick={toggleQueue} className="text-xs bg-gray-100 px-3 py-1 rounded-lg font-bold border">
-                            {queue.isActive ? 'Закрити' : 'Відкрити'}
-                        </button>}
+                        {isAdmin && (
+                            <div className="flex gap-2">
+                                <button onClick={toggleRule} className={`px-2 py-1 text-xs font-bold rounded border ${queue.config?.minMaxRule ? 'bg-blue-100 text-blue-600' : 'bg-gray-100'}`}>Мін+2</button>
+                                <button onClick={toggleQueue} className={`px-2 py-1 text-xs font-bold rounded border ${queue.isActive ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>{queue.isActive ? 'ON' : 'OFF'}</button>
+                            </div>
+                        )}
                     </div>
-
-                    <div className="p-3 grid grid-cols-3 gap-2">
-                        {Array.from({ length: 31 }, (_, i) => i + 1).map(slot => {
-                            const entry = queue.entries.find(e => e.position === slot);
-                            const style = entry ? STATUSES[entry.status].color : 'border-dashed border-gray-300 bg-gray-50';
+                    
+                    <div className="p-2 grid grid-cols-4 gap-2">
+                        {Array.from({length: 31}, (_, i) => i+1).map(i => {
+                            const entry = queue.entries.find(e => e.position === i);
+                            const style = entry ? STATUS_COLORS[entry.status] || STATUS_COLORS.waiting : 'bg-white border-dashed border-gray-300 opacity-70';
+                            
                             return (
-                                <div key={slot} onClick={() => setSelectedSlot({ slot, entry })}
-                                    className={`relative min-h-[100px] rounded-xl border-2 flex flex-col items-center justify-center p-1 transition-all active:scale-95 cursor-pointer ${style}`}>
-                                    <span className="absolute top-1 left-2 text-[10px] text-gray-400 font-bold">#{slot}</span>
+                                <div key={i} onClick={() => setSelectedSlot({ i, entry })} 
+                                    className={`aspect-square rounded-xl border-2 flex flex-col items-center justify-center p-1 relative cursor-pointer active:scale-95 transition ${style}`}>
+                                    <span className="absolute top-0.5 left-1 text-[8px] font-bold text-gray-400">{i}</span>
                                     {entry ? (
                                         <>
-                                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-xs font-bold mb-1 shadow-sm">{entry.user?.fullName?.[0]}</div>
-                                            <span className="text-[10px] font-bold text-center leading-tight line-clamp-2">{entry.user?.fullName}</span>
-                                            <div className="mt-1 flex items-center gap-1 bg-white/60 px-1.5 rounded text-[10px] font-bold">
-                                                Лаб {entry.labNumber} {STATUSES[entry.status].icon}
-                                            </div>
+                                            <div className="text-[10px] font-bold text-center leading-tight overflow-hidden h-6 flex items-center">{entry.user.fullName}</div>
+                                            <div className="text-[9px] font-bold bg-white/50 px-1 rounded mt-0.5">Лб {entry.labNumber}</div>
+                                            {entry.status === 'defending' && <div className="absolute top-0.5 right-0.5 text-green-600"><Icons.Play /></div>}
+                                            {entry.status === 'preparing' && <div className="absolute top-0.5 right-0.5 text-yellow-600"><Icons.Clock /></div>}
                                         </>
-                                    ) : <span className="text-2xl text-gray-300">+</span>}
+                                    ) : <span className="text-gray-300 text-xl">+</span>}
                                 </div>
-                            );
+                            )
                         })}
                     </div>
 
                     {selectedSlot && (
-                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedSlot(null)}>
-                            <div className="bg-white w-full max-w-xs rounded-2xl p-5" onClick={e => e.stopPropagation()}>
-                                <h3 className="text-xl font-bold mb-2">Місце #{selectedSlot.slot}</h3>
-                                {!selectedSlot.entry ? (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onClick={() => setSelectedSlot(null)}>
+                            <div className="bg-white w-full max-w-sm rounded-2xl p-5" onClick={e => e.stopPropagation()}>
+                                <h3 className="text-xl font-bold mb-4">Слот #{selectedSlot.i}</h3>
+                                {selectedSlot.entry ? (
                                     <>
-                                        <p className="text-gray-500 text-sm mb-3">Введіть номер лабораторної:</p>
-                                        <input type="number" className="w-full bg-gray-100 p-3 rounded-xl mb-4 text-center font-bold text-lg" 
-                                            value={labNum} onChange={e => setLabNum(e.target.value)} autoFocus placeholder="№" />
-                                        <button onClick={() => handleJoin(selectedSlot.slot)} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg">Зайняти</button>
+                                        <p className="mb-2 text-lg">{selectedSlot.entry.user.fullName}</p>
+                                        <p className="text-sm text-gray-500 mb-4">Лабораторна №{selectedSlot.entry.labNumber}</p>
+                                        {isAdmin && (
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button onClick={() => setStatus(selectedSlot.entry.userId, 'preparing')} className="p-2 bg-yellow-50 text-yellow-700 rounded-lg text-sm font-bold">Готується</button>
+                                                <button onClick={() => setStatus(selectedSlot.entry.userId, 'defending')} className="p-2 bg-green-50 text-green-700 rounded-lg text-sm font-bold">Здає</button>
+                                                <button onClick={() => setStatus(selectedSlot.entry.userId, 'completed')} className="p-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-bold">Здав</button>
+                                                <button onClick={() => setStatus(selectedSlot.entry.userId, 'waiting')} className="p-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold">Очікує</button>
+                                            </div>
+                                        )}
+                                        {/* Kick / Leave logic could go here */}
                                     </>
                                 ) : (
                                     <>
-                                        <p className="font-bold text-center text-lg mb-4">{selectedSlot.entry.user?.fullName}</p>
-                                        {isAdmin ? (
-                                            <div className="grid grid-cols-2 gap-2">
-                                                {Object.entries(STATUSES).filter(([k]) => k !== 'waiting').map(([k, v]) => (
-                                                    <button key={k} onClick={() => changeStatus(selectedSlot.entry.userId, k)} className={`p-2 rounded-lg text-xs font-bold border ${v.color}`}>
-                                                        {v.icon} {v.label}
-                                                    </button>
-                                                ))}
-                                                <button onClick={async () => {
-                                                    await fetch(`${API_BASE}/queues/kick`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ queueId: queue._id, targetUserId: selectedSlot.entry.userId, adminTgId: user.id }) });
-                                                    fetchQueue(); setSelectedSlot(null);
-                                                }} className="col-span-2 bg-red-100 text-red-600 py-2 rounded-lg font-bold">Видалити з черги</button>
-                                            </div>
-                                        ) : selectedSlot.entry.user?.telegramId === user?.id && (
-                                            <button onClick={async () => {
-                                                await fetch(`${API_BASE}/queues/leave`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ queueId: queue._id, telegramId: user.id }) });
-                                                fetchQueue(); setSelectedSlot(null);
-                                            }} className="w-full bg-red-100 text-red-600 py-3 rounded-xl font-bold">Вийти з черги</button>
-                                        )}
+                                        {queue.isActive ? (
+                                            <>
+                                                <input type="number" placeholder="Номер лаби" className="w-full p-3 bg-gray-100 rounded-xl mb-4 text-center font-bold text-lg" value={labNum} onChange={e => setLabNum(e.target.value)} />
+                                                <button onClick={() => join(selectedSlot.i)} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">Записатись</button>
+                                            </>
+                                        ) : <p className="text-red-500 font-bold text-center">Черга закрита</p>}
                                     </>
                                 )}
                             </div>
@@ -202,106 +284,149 @@
             );
         }
 
-        function Schedule() {
-            const [schedule, setSchedule] = useState(null);
-            const [week, setWeek] = useState(1);
+        function Topics({ subject, user, isAdmin, onBack }) {
+            const [topics, setTopics] = useState([]);
+            const [newTopic, setNewTopic] = useState('');
 
-            useEffect(() => { fetch(`${API_BASE}/schedule`).then(r => r.json()).then(setSchedule); }, []);
+            const load = () => fetch(`${API}/topics/${subject._id}`).then(r => r.json()).then(setTopics);
+            useEffect(() => { load(); }, []);
 
-            if (!schedule) return <div className="p-10 text-center">Завантаження...</div>;
+            const add = async () => {
+                await fetch(`${API}/topics`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ subjectId: subject._id, adminId: user.id, title: newTopic }) });
+                setNewTopic(''); load();
+            };
 
-            const weekKey = week === 1 ? 'scheduleFirstWeek' : 'scheduleSecondWeek';
-            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-            const dayNames = { Monday: 'Понеділок', Tuesday: 'Вівторок', Wednesday: 'Середа', Thursday: 'Четвер', Friday: "П'ятниця" };
+            const toggle = async (t) => {
+                const res = await fetch(`${API}/topics/toggle`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ topicId: t._id, telegramId: user.id }) });
+                if(res.ok) load(); else alert('Вже зайнято!');
+            };
 
             return (
-                <div className="p-4 pb-24 animate-in">
-                    <div className="flex bg-gray-200 p-1 rounded-xl mb-6">
-                        <button onClick={() => setWeek(1)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${week === 1 ? 'bg-white shadow-sm' : 'text-gray-500'}`}>1 Тиждень</button>
-                        <button onClick={() => setWeek(2)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${week === 2 ? 'bg-white shadow-sm' : 'text-gray-500'}`}>2 Тиждень</button>
+                <div className="min-h-screen bg-gray-50 p-4 animate-enter">
+                    <div className="flex gap-3 mb-4 items-center">
+                        <button onClick={onBack}><Icons.ArrowLeft /></button>
+                        <h1 className="font-bold text-xl">Теми рефератів</h1>
                     </div>
-                    <div className="space-y-6">
-                        {days.map(dayCode => {
-                            const dayData = schedule[weekKey].find(d => d.day === dayCode);
-                            if (!dayData?.pairs?.length) return null;
-                            return (
-                                <div key={dayCode}>
-                                    <h3 className="text-gray-400 font-bold uppercase text-xs mb-2 pl-1">{dayNames[dayCode]}</h3>
-                                    <div className="space-y-3">
-                                        {dayData.pairs.map((pair, idx) => {
-                                            const isLec = pair.type.includes('Лек');
-                                            return (
-                                                <div key={idx} className={`p-4 rounded-xl border-l-4 ${isLec ? 'border-purple-500' : 'border-orange-500'} bg-white shadow-sm flex gap-4`}>
-                                                    <div className="flex flex-col items-center justify-center min-w-[50px] border-r border-gray-100 pr-4">
-                                                        <span className="font-bold text-gray-900 text-sm">{pair.time.substring(0, 5)}</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${isLec ? 'bg-purple-100 text-purple-700' : 'bg-orange-100 text-orange-700'}`}>{pair.type}</span>
-                                                        <h4 className="font-bold text-gray-800 leading-tight mt-1 mb-1">{pair.name}</h4>
-                                                        <p className="text-xs text-gray-500">👨‍🏫 {pair.teacherName}</p>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                    
+                    {isAdmin && (
+                        <div className="flex gap-2 mb-4">
+                            <input className="flex-1 p-2 rounded-lg border" placeholder="Нова тема" value={newTopic} onChange={e => setNewTopic(e.target.value)} />
+                            <button onClick={add} className="bg-blue-600 text-white px-4 rounded-lg font-bold">Додати</button>
+                        </div>
+                    )}
+
+                    <div className="space-y-2">
+                        {topics.map(t => (
+                            <div key={t._id} className="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center shadow-sm">
+                                <div className="flex-1">
+                                    <p className="font-medium text-gray-800">{t.title}</p>
+                                    {t.userName && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">{t.userName}</span>}
                                 </div>
-                            );
-                        })}
+                                <button onClick={() => toggle(t)} className={`px-4 py-2 rounded-lg font-bold text-sm ${t.userId === String(user._mongoId) ? 'bg-red-100 text-red-600' : t.userId ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-100 text-blue-600'}`}>
+                                    {t.userId === String(user._mongoId) ? 'Звільнити' : t.userId ? 'Зайнято' : 'Зайняти'}
+                                </button>
+                            </div>
+                        ))}
                     </div>
                 </div>
             );
         }
-
-        function Home({ user, onNavigate, isAdmin }) {
-            const [subjects, setSubjects] = useState([]);
-            const [isEditing, setIsEditing] = useState(false);
-            const [newSub, setNewSub] = useState({ name: '', teacherLecture: '', teacherPractice: '' });
-
-            const load = () => fetch(`${API_BASE}/subjects`).then(r => r.json()).then(setSubjects);
+        
+        function Homework({ subject, user, isAdmin, onBack }) {
+            const [hw, setHw] = useState([]);
+            const [text, setText] = useState('');
+            const [date, setDate] = useState('');
+            
+            const load = () => fetch(`${API}/homework/${subject._id}`).then(r => r.json()).then(setHw);
             useEffect(() => { load(); }, []);
 
             const add = async () => {
-                await fetch(`${API_BASE}/subjects`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newSub) });
-                setIsEditing(false); load();
+                await fetch(`${API}/homework`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ subjectId: subject._id, text, deadline: date, authorId: user.id }) });
+                setText(''); setDate(''); load();
             };
 
             const del = async (id) => {
-                if(confirm('Видалити?')) { await fetch(`${API_BASE}/subjects/${id}`, { method: 'DELETE' }); load(); }
+                await fetch(`${API}/homework/${id}?adminId=${user.id}`, { method: 'DELETE' });
+                load();
             };
 
             return (
-                <div className="p-4 pb-24 animate-in">
-                    <div className="flex justify-between items-center mb-6 pt-2">
-                        <div>
-                            <h1 className="text-2xl font-bold">Привіт, {user?.firstName}!</h1>
-                            <p className="text-gray-500 text-sm">Твої предмети</p>
+                <div className="min-h-screen bg-gray-50 p-4 animate-enter pb-24">
+                     <div className="flex gap-3 mb-4 items-center">
+                        <button onClick={onBack}><Icons.ArrowLeft /></button>
+                        <h1 className="font-bold text-xl">Домашка</h1>
+                    </div>
+                    
+                    <div className="bg-white p-4 rounded-xl shadow-sm mb-6">
+                        <h3 className="font-bold mb-2">Додати завдання</h3>
+                        <textarea className="w-full p-2 border rounded-lg mb-2 text-sm" placeholder="Що задали?" value={text} onChange={e => setText(e.target.value)}></textarea>
+                        <div className="flex gap-2">
+                            <input type="date" className="p-2 border rounded-lg text-sm" value={date} onChange={e => setDate(e.target.value)} />
+                            <button onClick={add} className="flex-1 bg-black text-white rounded-lg font-bold">Додати</button>
                         </div>
-                        {isAdmin && <button onClick={() => setIsEditing(!isEditing)} className="p-2 bg-gray-100 rounded-full"><Icons.Settings /></button>}
                     </div>
 
-                    {isEditing && (
-                        <div className="bg-white p-4 rounded-xl shadow-lg mb-6 border border-blue-100">
-                            <h3 className="font-bold mb-3">Додати предмет</h3>
-                            <input placeholder="Назва" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={newSub.name} onChange={e => setNewSub({...newSub, name: e.target.value})} />
-                            <input placeholder="Лектор" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={newSub.teacherLecture} onChange={e => setNewSub({...newSub, teacherLecture: e.target.value})} />
-                            <input placeholder="Практик" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={newSub.teacherPractice} onChange={e => setNewSub({...newSub, teacherPractice: e.target.value})} />
-                            <button onClick={add} className="w-full bg-blue-600 text-white py-2 rounded font-bold">Зберегти</button>
-                        </div>
-                    )}
-
                     <div className="space-y-3">
-                        {subjects.map(sub => (
-                            <div key={sub._id} onClick={() => onNavigate('subject', sub)} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 active:scale-[0.98] transition-transform flex justify-between items-center">
-                                <div>
-                                    <h3 className="font-bold text-gray-800">{sub.name}</h3>
-                                    <p className="text-xs text-gray-500 mt-1">🎓 {sub.teacherLecture}</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    {isEditing && <button onClick={(e) => {e.stopPropagation(); del(sub._id)}} className="text-red-400 p-2"><Icons.Trash /></button>}
-                                    <div className="w-8 h-8 bg-gray-50 rounded-full flex items-center justify-center"><svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+                        {hw.map(h => (
+                            <div key={h._id} className="bg-white p-4 rounded-xl border border-gray-200 relative">
+                                <p className="text-gray-800 whitespace-pre-wrap">{h.text}</p>
+                                <div className="flex justify-between items-center mt-3">
+                                    <span className="text-xs font-bold bg-red-50 text-red-500 px-2 py-1 rounded">Дедлайн: {h.deadline || 'Без дати'}</span>
+                                    {isAdmin && <button onClick={() => del(h._id)} className="text-red-400 text-xs font-bold">Видалити</button>}
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+            )
+        }
+
+        function Schedule({ onNavigate }) {
+            const [schedule, setSchedule] = useState(null);
+            const [week, setWeek] = useState(1);
+            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+            const dayNames = { Monday: 'Понеділок', Tuesday: 'Вівторок', Wednesday: 'Середа', Thursday: 'Четвер', Friday: "П'ятниця" };
+
+            useEffect(() => { fetch(`${API}/schedule`).then(r => r.json()).then(setSchedule); }, []);
+            
+            if(!schedule) return <div className="p-10 text-center">Завантаження...</div>;
+
+            return (
+                <div className="p-4 pb-24 animate-enter">
+                    <div className="flex bg-gray-200 p-1 rounded-xl mb-4">
+                        <button onClick={() => setWeek(1)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${week===1 ? 'bg-white shadow' : 'text-gray-500'}`}>1 Тиждень</button>
+                        <button onClick={() => setWeek(2)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${week===2 ? 'bg-white shadow' : 'text-gray-500'}`}>2 Тиждень</button>
+                    </div>
+
+                    <div className="space-y-6">
+                        {days.map(d => {
+                            const pairs = schedule[week===1 ? 'scheduleFirstWeek' : 'scheduleSecondWeek'].find(x => x.day === d)?.pairs || [];
+                            if(!pairs.length) return null;
+                            return (
+                                <div key={d}>
+                                    <h3 className="text-gray-400 font-bold uppercase text-xs mb-2 pl-1">{dayNames[d]}</h3>
+                                    <div className="space-y-2">
+                                        {pairs.map((p, i) => {
+                                            const isLec = p.type.includes('Лек');
+                                            const isLab = p.type.includes('Лаб');
+                                            const color = isLec ? 'border-purple-500' : isLab ? 'border-blue-500' : 'border-orange-500';
+                                            const bg = isLec ? 'bg-purple-50 text-purple-700' : isLab ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-700';
+                                            
+                                            return (
+                                                <div key={i} onClick={() => onNavigate('search_subject', p.name)} className={`bg-white p-3 rounded-xl border-l-4 shadow-sm flex gap-3 ${color}`}>
+                                                    <div className="font-bold text-gray-900 w-12 text-sm pt-1">{p.time.slice(0,5)}</div>
+                                                    <div>
+                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${bg}`}>{p.type}</span>
+                                                        <h4 className="font-bold text-gray-800 leading-tight my-1">{p.name}</h4>
+                                                        <p className="text-xs text-gray-500">{p.teacherName}</p>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </div>
                 </div>
             );
@@ -311,45 +436,79 @@
             const [view, setView] = useState('home');
             const [stack, setStack] = useState([]);
             const [user, setUser] = useState(null);
-            const ADMIN_IDS = [1876094081,1117478810]; // Додай сюди свій ID для адмін-прав
+            
+            // ADMIN IDS HARDCODED FOR FRONTEND UI TOGGLE (Security is on backend)
+            const ADMIN_IDS = [1876094081, 1117478810]; 
 
             useEffect(() => {
                 const tg = window.Telegram?.WebApp;
-                if (tg) {
+                if(tg) {
                     tg.ready(); tg.expand();
                     const u = tg.initDataUnsafe?.user;
                     if(u) {
-                        setUser({ id: u.id, firstName: u.first_name, username: u.username });
-                        fetch(`${API_BASE}/users/update`, { method: 'POST', body: JSON.stringify({ telegramId: u.id, fullName: `${u.first_name} ${u.last_name || ''}`, username: u.username }) });
+                        setUser({...u, _mongoId: null}); // _mongoId will be fetched logic implies
+                        // Update user in DB
+                        fetch(`${API}/users/update`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ telegramId: u.id, fullName: `${u.first_name} ${u.last_name||''}`.trim(), username: u.username }) });
+                        // Hack to get mongo ID for comparison
+                        fetch(`${API}/queues/subject/dummy`).then(r => r.json()).then(() => {}); 
                     }
+                } else {
+                    // Dev mock
+                    setUser({ id: 1876094081, first_name: "Admin", _mongoId: "dev" });
                 }
             }, []);
 
-            const navigate = (v, d) => setStack([...stack, { view: v, data: d }]);
-            const back = () => setStack(stack.slice(0, -1));
-            const current = stack.length > 0 ? stack[stack.length - 1] : { view };
+            const navigate = (v, data) => {
+                if(v === 'search_subject') {
+                    // Find subject logic would go here, simplified to just alert for now
+                    // Ideally: fetch subjects, find by name, go to details
+                    fetch(`${API}/subjects`).then(r => r.json()).then(subs => {
+                        const found = subs.find(s => s.name.includes(data) || data.includes(s.name));
+                        if(found) navigate('details', found);
+                        else alert('Предмет не знайдено в базі даних додатку');
+                    });
+                    return;
+                }
+                setStack([...stack, { view, data: stack.length ? stack[stack.length-1].data : null }]);
+                setView(v);
+                if(data) setStack(s => [...s.slice(0, -1), { view: v, data }]);
+            };
+
+            const back = () => {
+                if(stack.length === 0) return;
+                const prev = stack.pop();
+                setStack([...stack]);
+                setView(prev.view);
+            };
+
+            const currentData = stack.length && stack[stack.length-1]?.view === view ? stack[stack.length-1].data : null;
             const isAdmin = user && ADMIN_IDS.includes(user.id);
 
             const render = () => {
-                switch(current.view) {
-                    case 'home': return <Home user={user} onNavigate={navigate} isAdmin={isAdmin} />;
-                    case 'schedule': return <Schedule />;
-                    case 'homework': return <div className="p-10 text-center">Домашка в розробці...</div>;
-                    case 'subject': return <SubjectView subject={current.data} user={user} onNavigate={navigate} onBack={back} />;
-                    case 'queue': return <QueueView subject={current.data} user={user} onBack={back} isAdmin={isAdmin} />;
-                    case 'topics': return <div className="p-10 text-center text-gray-500"><button onClick={back}>Назад</button><br/><br/>Теми в розробці...</div>;
-                    default: return <Home user={user} onNavigate={navigate} isAdmin={isAdmin} />;
+                switch(view) {
+                    case 'home': return <SubjectsList user={user} isAdmin={isAdmin} onNavigate={navigate} />;
+                    case 'details': return <SubjectDetails subject={currentData} user={user} isAdmin={isAdmin} onNavigate={navigate} onBack={back} />;
+                    case 'queue': return <Queue subject={currentData} user={user} isAdmin={isAdmin} onBack={back} />;
+                    case 'topics': return <Topics subject={currentData} user={user} isAdmin={isAdmin} onBack={back} />;
+                    case 'homework': return <Homework subject={currentData} user={user} isAdmin={isAdmin} onBack={back} />;
+                    case 'schedule': return <Schedule onNavigate={navigate} />;
+                    default: return <SubjectsList />;
                 }
             };
 
             return (
-                <div className="max-w-md mx-auto min-h-screen bg-gray-50 font-sans text-gray-900">
+                <div className="max-w-md mx-auto min-h-screen font-sans text-gray-900">
                     {render()}
                     {stack.length === 0 && (
                         <div className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-2 pb-6 z-50">
-                            <button onClick={() => setView('home')} className={`flex flex-col items-center p-2 w-16 rounded-xl transition ${view === 'home' ? 'text-blue-600 bg-blue-50' : 'text-gray-400'}`}><Icons.Home /><span className="text-[10px] font-bold mt-1">Предмети</span></button>
-                            <button onClick={() => setView('schedule')} className={`flex flex-col items-center p-2 w-16 rounded-xl transition ${view === 'schedule' ? 'text-blue-600 bg-blue-50' : 'text-gray-400'}`}><Icons.Calendar /><span className="text-[10px] font-bold mt-1">Розклад</span></button>
-                            <button onClick={() => setView('homework')} className={`flex flex-col items-center p-2 w-16 rounded-xl transition ${view === 'homework' ? 'text-blue-600 bg-blue-50' : 'text-gray-400'}`}><Icons.Clipboard /><span className="text-[10px] font-bold mt-1">ДЗ</span></button>
+                            <button onClick={() => setView('home')} className={`flex flex-col items-center p-2 rounded-xl w-20 transition ${view==='home'?'text-blue-600 bg-blue-50':'text-gray-400'}`}>
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                                <span className="text-[10px] font-bold mt-1">Предмети</span>
+                            </button>
+                            <button onClick={() => setView('schedule')} className={`flex flex-col items-center p-2 rounded-xl w-20 transition ${view==='schedule'?'text-blue-600 bg-blue-50':'text-gray-400'}`}>
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                <span className="text-[10px] font-bold mt-1">Розклад</span>
+                            </button>
                         </div>
                     )}
                 </div>

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from .connection import db
 import logging
-
+from bson import ObjectId
 logger = logging.getLogger(__name__)
 
 class LinksManager:
@@ -258,3 +258,61 @@ class GroupMembersManager:
         except Exception as e:
             logger.error(f"Помилка отримання muted учасників: {e}")
             return []
+        
+
+class Models:
+    @staticmethod
+    async def get_all_links() -> List[Dict]:
+        return await db.db.links.find({}).to_list(length=None)
+
+    @staticmethod
+    async def get_subject_links(subject_name: str) -> List[Dict]:
+        return await db.db.links.find({"subject_name": subject_name}).to_list(length=None)
+
+class HomeworkManager:
+    @staticmethod
+    async def add_hw(subject_id: str, text: str, deadline: str, author_id: int):
+        await db.db.homework.insert_one({
+            "subjectId": subject_id,
+            "text": text,
+            "deadline": deadline,
+            "authorId": author_id,
+            "createdAt": datetime.utcnow()
+        })
+
+    @staticmethod
+    async def get_hw(subject_id: str):
+        hws = await db.db.homework.find({"subjectId": subject_id}).sort("createdAt", -1).to_list(None)
+        for h in hws: h["_id"] = str(h["_id"])
+        return hws
+
+    @staticmethod
+    async def delete_hw(hw_id: str):
+        await db.db.homework.delete_one({"_id": ObjectId(hw_id)})
+
+class TopicsManager:
+    @staticmethod
+    async def get_topics(subject_id: str):
+        topics = await db.db.topics.find({"subjectId": subject_id}).to_list(None)
+        for t in topics: t["_id"] = str(t["_id"])
+        return topics
+
+    @staticmethod
+    async def create_topic(subject_id: str, title: str):
+        await db.db.topics.insert_one({
+            "subjectId": subject_id,
+            "title": title,
+            "userId": None,
+            "userName": None
+        })
+
+    @staticmethod
+    async def toggle_topic(topic_id: str, user_id: str, user_name: str):
+        topic = await db.db.topics.find_one({"_id": ObjectId(topic_id)})
+        if topic.get("userId") == user_id:
+            await db.db.topics.update_one({"_id": ObjectId(topic_id)}, {"$set": {"userId": None, "userName": None}})
+            return True
+        elif topic.get("userId") is None:
+            await db.db.topics.update_one({"_id": ObjectId(topic_id)}, {"$set": {"userId": user_id, "userName": user_name}})
+            return True
+        return False
