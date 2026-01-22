@@ -285,7 +285,10 @@ class SubjectsManager:
                 "name": data["name"], 
                 "teacherLecture": data.get("teacherLecture"),
                 "teacherPractice": data.get("teacherPractice"),
-                "note": data.get("note")
+                "note": data.get("note"),
+                "hasQueue": data.get("hasQueue", True),
+                "hasTopics": data.get("hasTopics", True),
+                "hasHomework": data.get("hasHomework", True)
             }}
         )
 
@@ -329,7 +332,7 @@ class TopicsManager:
         await db.db.topics.insert_one({
             "subjectId": subject_id,
             "title": title,
-            "users": [] # Список тих, хто взяв
+            "users": [] 
         })
     
     @staticmethod
@@ -351,17 +354,13 @@ class TopicsManager:
         
         users = topic.get("users", [])
         
-        # Перевіряємо чи юзер вже взяв цю тему
         existing_user = next((u for u in users if u["userId"] == user_id), None)
         
         if existing_user:
-            # Якщо взяв - видаляємо (toggle off)
             new_users = [u for u in users if u["userId"] != user_id]
             await db.db.topics.update_one({"_id": ObjectId(topic_id)}, {"$set": {"users": new_users}})
             return True
         else:
-            # Якщо не взяв - додаємо (toggle on)
-            # Тут НЕМАЄ обмеження, що тему може взяти тільки один. Займають скільки завгодно людей.
             users.append({"userId": user_id, "userName": user_name})
             await db.db.topics.update_one({"_id": ObjectId(topic_id)}, {"$set": {"users": users}})
             return True

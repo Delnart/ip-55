@@ -15,6 +15,9 @@ class SubjectModel(BaseModel):
     teacherLecture: Optional[str] = None
     teacherPractice: Optional[str] = None
     note: Optional[str] = None
+    hasQueue: bool = True
+    hasTopics: bool = True
+    hasHomework: bool = True
 
 class QueueConfig(BaseModel):
     queueId: str
@@ -35,6 +38,7 @@ async def get_subjects():
 
 @router.post("/subjects")
 async def create_subject(subject: SubjectModel):
+    # .dict() збереже і нові поля
     result = await db.db.subjects.insert_one(subject.dict())
     return {"success": True, "id": str(result.inserted_id)}
 
@@ -57,7 +61,6 @@ async def get_queue(subject_id: str):
     
     entries_data = []
     for entry in queue.get("entries", []):
-        # Якщо юзер був доданий адміном вручну і не має ID в базі, треба це врахувати (хоча тут ми будемо брати з бази)
         if "userId" in entry:
             user = await db.db.users.find_one({"_id": ObjectId(entry["userId"])})
             if user:
@@ -105,9 +108,8 @@ async def join_queue(data: dict):
     if not queue.get("isActive", True) and not is_admin_add:
         raise HTTPException(400, "Черга закрита")
 
-    # Якщо додає адмін, ми очікуємо targetUserId. Якщо сам юзер - telegramId
     if is_admin_add:
-        target_user_id = data.get("targetUserId") # MongoDB ID string
+        target_user_id = data.get("targetUserId") 
         if not target_user_id: raise HTTPException(400, "No user selected")
         user_id = target_user_id
     else:
@@ -117,14 +119,12 @@ async def join_queue(data: dict):
 
     entries = queue.get("entries", [])
     
-    # Перевірка на дублікат (якщо адмін додає, можемо дозволити, але краще попередити)
     if any(e["userId"] == user_id for e in entries) and not is_admin_add:
         raise HTTPException(400, "Ви вже в черзі")
         
     if any(e["position"] == data["position"] for e in entries):
         raise HTTPException(400, "Місце зайняте")
 
-    # Min/Max Rule Logic (ігноруємо для адміна)
     if queue.get("config", {}).get("minMaxRule", True) and not is_admin_add:
         active_labs = [e["labNumber"] for e in entries if e.get("status") in ["preparing", "defending", "completed"]]
         if active_labs:
@@ -145,9 +145,8 @@ async def join_queue(data: dict):
 
 @router.post("/queues/leave")
 async def leave_queue(data: dict):
-    # Якщо це адмін видаляє когось (kick)
     if data.get("isAdminKick", False):
-        user_id = data.get("targetUserId") # Mongo ID
+        user_id = data.get("targetUserId")
     else:
         user = await db.db.users.find_one({"telegramId": data["telegramId"]})
         user_id = str(user["_id"])

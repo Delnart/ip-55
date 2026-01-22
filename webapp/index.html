@@ -14,6 +14,9 @@
         .hide-scroll::-webkit-scrollbar { display: none; }
         .animate-enter { animation: slideIn 0.2s ease-out; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Стиль для перемикача */
+        .toggle-checkbox:checked { right: 0; border-color: #2563EB; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #2563EB; }
     </style>
 </head>
 <body>
@@ -41,7 +44,15 @@
             const [subjects, setSubjects] = useState([]);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [editSub, setEditSub] = useState(null); 
-            const [form, setForm] = useState({ name: '', teacherLecture: '', teacherPractice: '' });
+            // Додані поля hasQueue, hasTopics, hasHomework
+            const [form, setForm] = useState({ 
+                name: '', 
+                teacherLecture: '', 
+                teacherPractice: '',
+                hasQueue: true,
+                hasTopics: true,
+                hasHomework: true
+            });
 
             useEffect(() => {
                 fetch(`${API}/subjects`).then(r => r.json()).then(setSubjects);
@@ -49,7 +60,19 @@
 
             const openModal = (sub = null) => {
                 setEditSub(sub);
-                setForm(sub ? { ...sub } : { name: '', teacherLecture: '', teacherPractice: '' });
+                if (sub) {
+                    setForm({
+                        name: sub.name,
+                        teacherLecture: sub.teacherLecture || '',
+                        teacherPractice: sub.teacherPractice || '',
+                        // Якщо поле відсутнє (старий предмет), вважаємо його true
+                        hasQueue: sub.hasQueue !== undefined ? sub.hasQueue : true,
+                        hasTopics: sub.hasTopics !== undefined ? sub.hasTopics : true,
+                        hasHomework: sub.hasHomework !== undefined ? sub.hasHomework : true,
+                    });
+                } else {
+                    setForm({ name: '', teacherLecture: '', teacherPractice: '', hasQueue: true, hasTopics: true, hasHomework: true });
+                }
                 setIsModalOpen(true);
             };
 
@@ -68,6 +91,17 @@
                     setSubjects(subjects.filter(s => s._id !== id));
                 }
             };
+
+            // Компонент перемикача
+            const Toggle = ({ label, checked, onChange }) => (
+                <div className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                    <span className="text-sm font-medium text-gray-700">{label}</span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" checked={checked} onChange={e => onChange(e.target.checked)} />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+            );
 
             return (
                 <div className="p-4 animate-enter pb-24">
@@ -98,6 +132,14 @@
                                 <input placeholder="Назва" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
                                 <input placeholder="Лектор" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={form.teacherLecture} onChange={e => setForm({...form, teacherLecture: e.target.value})} />
                                 <input placeholder="Практик" className="w-full p-2 bg-gray-50 rounded mb-2 border" value={form.teacherPractice} onChange={e => setForm({...form, teacherPractice: e.target.value})} />
+                                
+                                <div className="mt-4 mb-4 bg-gray-50 p-3 rounded-lg">
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Налаштування</h4>
+                                    <Toggle label="Черга" checked={form.hasQueue} onChange={v => setForm({...form, hasQueue: v})} />
+                                    <Toggle label="Теми рефератів" checked={form.hasTopics} onChange={v => setForm({...form, hasTopics: v})} />
+                                    <Toggle label="Домашнє завдання" checked={form.hasHomework} onChange={v => setForm({...form, hasHomework: v})} />
+                                </div>
+
                                 <div className="flex gap-2 mt-4">
                                     <button onClick={save} className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">Зберегти</button>
                                     <button onClick={() => setIsModalOpen(false)} className="px-4 bg-gray-100 rounded-lg">Скасувати</button>
@@ -111,6 +153,9 @@
 
         function SubjectDetails({ subject, user, isAdmin, onNavigate, onBack }) {
             if (!subject) return <div className="p-10 text-center"><button onClick={onBack} className="text-blue-500">Назад</button></div>;
+
+            // Деструктуризація з дефолтними значеннями (для сумісності зі старими даними)
+            const { hasQueue = true, hasTopics = true, hasHomework = true } = subject;
 
             return (
                 <div className="min-h-screen bg-white animate-enter">
@@ -134,36 +179,45 @@
                         <div>
                             <h3 className="font-bold text-gray-800 mb-3">Дії</h3>
                             <div className="grid gap-3">
-                                <button onClick={() => onNavigate('queue', subject)} className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between hover:bg-gray-100 transition active:scale-[0.99]">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">Q</div>
-                                        <div className="text-left">
-                                            <p className="font-bold text-gray-800">Черга на здачу</p>
-                                            <p className="text-xs text-gray-500">Запис на лабораторні</p>
+                                {hasQueue && (
+                                    <button onClick={() => onNavigate('queue', subject)} className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between hover:bg-gray-100 transition active:scale-[0.99]">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">Q</div>
+                                            <div className="text-left">
+                                                <p className="font-bold text-gray-800">Черга на здачу</p>
+                                                <p className="text-xs text-gray-500">Запис на лабораторні</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <Icons.Play />
-                                </button>
-                                <button onClick={() => onNavigate('topics', subject)} className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between hover:bg-gray-100 transition active:scale-[0.99]">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center font-bold">T</div>
-                                        <div className="text-left">
-                                            <p className="font-bold text-gray-800">Теми рефератів</p>
-                                            <p className="text-xs text-gray-500">Бронювання тем</p>
+                                        <Icons.Play />
+                                    </button>
+                                )}
+                                {hasTopics && (
+                                    <button onClick={() => onNavigate('topics', subject)} className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between hover:bg-gray-100 transition active:scale-[0.99]">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center font-bold">T</div>
+                                            <div className="text-left">
+                                                <p className="font-bold text-gray-800">Теми рефератів</p>
+                                                <p className="text-xs text-gray-500">Бронювання тем</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <Icons.Play />
-                                </button>
-                                <button onClick={() => onNavigate('homework', subject)} className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between hover:bg-gray-100 transition active:scale-[0.99]">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center font-bold">H</div>
-                                        <div className="text-left">
-                                            <p className="font-bold text-gray-800">Домашнє завдання</p>
-                                            <p className="text-xs text-gray-500">Перегляд та додавання</p>
+                                        <Icons.Play />
+                                    </button>
+                                )}
+                                {hasHomework && (
+                                    <button onClick={() => onNavigate('homework', subject)} className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between hover:bg-gray-100 transition active:scale-[0.99]">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center font-bold">H</div>
+                                            <div className="text-left">
+                                                <p className="font-bold text-gray-800">Домашнє завдання</p>
+                                                <p className="text-xs text-gray-500">Перегляд та додавання</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <Icons.Play />
-                                </button>
+                                        <Icons.Play />
+                                    </button>
+                                )}
+                                {!hasQueue && !hasTopics && !hasHomework && (
+                                    <p className="text-center text-gray-400 py-4">Немає доступних дій для цього предмета.</p>
+                                )}
                             </div>
                         </div>
                     </div>

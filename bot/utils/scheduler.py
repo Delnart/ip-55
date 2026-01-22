@@ -179,6 +179,11 @@ class NotificationScheduler:
     async def _check_end_of_day_gif(self):
         """Перевірка закінчення останньої пари для надсилання GIF"""
         try:
+            # 1. ПЕРЕВІРКА НАЛАШТУВАННЯ СПОВІЩЕНЬ
+            notifications_enabled = await SettingsManager.get_setting("notifications_enabled", True)
+            if not notifications_enabled:
+                return
+
             kiev_tz = pytz.timezone(TIMEZONE)
             now = datetime.now(kiev_tz)
             today = now.date()

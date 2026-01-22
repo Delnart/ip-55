@@ -50,11 +50,9 @@ class ScheduleAPI:
                     if response.status == 200:
                         data = await response.json()
                         
-                        # Перевірка на вкладеність 'data' (іноді API повертає обгорнутий об'єкт)
                         if 'data' in data and 'scheduleFirstWeek' not in data:
                             data = data['data']
                             
-                        # Перевірка чи прийшли масиви
                         if not data.get('scheduleFirstWeek') and not data.get('scheduleSecondWeek'):
                             logger.warning("Отримано порожній розклад! Перевірте KPI_GROUP_ID.")
                         else:
@@ -70,7 +68,6 @@ class ScheduleAPI:
     
     @staticmethod
     async def format_class_info(class_data: Dict[str, Any]) -> str:
-        # Імпорт тут щоб уникнути циклічної залежності
         from database.models import LinksManager
         
         class_type = CLASS_TYPES.get(class_data.get('type', ''), class_data.get('type', ''))
@@ -101,11 +98,8 @@ class ScheduleAPI:
         
         return info
     
-    # Інші методи (get_current_class_info, get_today_schedule і т.д.) 
-    # залишаються без змін, вони використовують get_schedule
     @staticmethod
     async def get_current_class_info() -> Optional[Dict[str, Any]]:
-        # ... (код з попередньої версії)
         try:
             schedule_data = await ScheduleAPI.get_schedule()
             if not schedule_data: return None
@@ -138,7 +132,6 @@ class ScheduleAPI:
 
     @staticmethod
     async def get_today_schedule() -> str:
-        # Спрощена версія для економії місця, логіка та сама
         schedule = await ScheduleAPI.get_schedule()
         if not schedule: return "❌ Помилка розкладу"
         
