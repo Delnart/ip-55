@@ -22,6 +22,23 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        // Глобальний обробник помилок для діагностики "білого екрану"
+        window.onerror = function(msg, url, line, col, error) {
+            // Показуємо помилку тільки якщо ми в Telegram (щоб не лякати в браузері, якщо там працює)
+            if (window.Telegram?.WebApp?.initData) {
+                const root = document.getElementById('root');
+                root.innerHTML = `
+                    <div style="padding: 20px; color: red; font-family: sans-serif; text-align: center;">
+                        <h2 style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">⚠️ Сталася помилка</h2>
+                        <p style="font-size: 12px; background: #fee; padding: 10px; border-radius: 8px; word-break: break-all;">
+                            ${msg}<br>Line: ${line}
+                        </p>
+                        <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background: #333; color: white; border: none; border-radius: 8px;">Оновити</button>
+                    </div>
+                `;
+            }
+        };
+
         const { useState, useEffect } = React;
         const API = '/api';
         
@@ -98,7 +115,7 @@
             });
 
             useEffect(() => {
-                fetch(`${API}/subjects`).then(r => r.json()).then(setSubjects);
+                fetch(`${API}/subjects`).then(r => r.json()).then(setSubjects).catch(err => console.error("Subjects fetch error:", err));
             }, []);
 
             const openModal = (sub = null) => {
@@ -312,7 +329,7 @@
                     queueId: queue._id, 
                     telegramId: user?.id, 
                     labNumber: parseInt(labNum), 
-                    position: pos,
+                    position: pos, 
                     isAdminAdd: !!adminAddId,
                     targetUserId: adminAddId
                 };
@@ -735,19 +752,23 @@
             const [history, setHistory] = useState([{ view: 'home', data: null }]);
             const [user, setUser] = useState(null);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-            const [isTelegram, setIsTelegram] = useState(false); // Новий стейт
+            
+            // --- ПОКРАЩЕНО: Ініціалізуємо стан "isTelegram" одразу ---
+            // Це дозволяє уникнути "миготіння" блокування і білого екрану
+            const [isTelegram, setIsTelegram] = useState(() => !!window.Telegram?.WebApp?.initData);
+            
             const ADMIN_IDS = [1876094081, 1117478810]; 
 
             useEffect(() => {
                 const tg = window.Telegram?.WebApp;
                 
-                // Перевірка на наявність initData (є тільки в Telegram)
                 if (tg && tg.initData) {
                     setIsTelegram(true);
-                    tg.ready(); tg.expand();
+                    tg.ready(); 
+                    tg.expand();
+                    
                     const u = tg.initDataUnsafe?.user;
                     if(u) {
-                        // Оновлено: надсилаємо avatarUrl (photo_url)
                         fetch(`${API}/users/update`, { 
                             method: 'POST', 
                             headers: {'Content-Type': 'application/json'}, 
@@ -766,12 +787,12 @@
                         });
                     }
                 } else {
-                    // Блокуємо доступ, якщо не Telegram
+                    // Якщо відкрили не в Telegram
                     setIsTelegram(false);
                 }
             }, []);
 
-            // Екран блокування для браузера
+            // --- ЕКРАН БЛОКУВАННЯ (тільки якщо точно не Telegram) ---
             if (!isTelegram) {
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-50">
