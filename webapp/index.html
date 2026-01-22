@@ -14,7 +14,6 @@
         .hide-scroll::-webkit-scrollbar { display: none; }
         .animate-enter { animation: slideIn 0.2s ease-out; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        /* Стиль для перемикача */
         .toggle-checkbox:checked { right: 0; border-color: #2563EB; }
         .toggle-checkbox:checked + .toggle-label { background-color: #2563EB; }
     </style>
@@ -35,16 +34,58 @@
             Play: () => <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z" /></svg>,
             Clock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
             Check: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
-            UserPlus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
+            UserPlus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>,
+            Settings: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+        };
+
+        const QUEUE_STATUSES = {
+            'waiting': { label: 'В черзі', color: 'bg-white', icon: '⏳' },
+            'preparing': { label: 'Готується', color: 'bg-yellow-100', icon: '📝' },
+            'defending': { label: 'Здає', color: 'bg-green-100', icon: '▶️' },
+            'completed': { label: 'Здав', color: 'bg-blue-100', icon: '✅' },
         };
 
         // --- COMPONENTS ---
 
-        function SubjectsList({ user, isAdmin, onNavigate }) {
+        function SettingsModal({ isOpen, onClose, user, onSave }) {
+            const [name, setName] = useState(user?.officialName || '');
+            
+            useEffect(() => {
+                if(isOpen && user) setName(user.officialName || user.fullName || '');
+            }, [isOpen, user]);
+
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-sm rounded-2xl p-5 animate-enter">
+                        <h3 className="text-lg font-bold mb-2">Налаштування профілю</h3>
+                        <p className="text-sm text-gray-500 mb-4">Введіть ваше справжнє Прізвище та Ім'я для коректного відображення в черзі.</p>
+                        
+                        <div className="mb-4">
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Ваше ПІБ</label>
+                            <input 
+                                type="text" 
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
+                                placeholder="Петренко Іван"
+                                value={name}
+                                onChange={e => setName(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button onClick={() => onSave(name)} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold active:scale-95 transition">Зберегти</button>
+                            <button onClick={onClose} className="px-4 bg-gray-100 rounded-xl font-bold active:scale-95 transition">Закрити</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function SubjectsList({ user, isAdmin, onNavigate, onOpenSettings }) {
             const [subjects, setSubjects] = useState([]);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [editSub, setEditSub] = useState(null); 
-            // Додані поля hasQueue, hasTopics, hasHomework
             const [form, setForm] = useState({ 
                 name: '', 
                 teacherLecture: '', 
@@ -65,7 +106,6 @@
                         name: sub.name,
                         teacherLecture: sub.teacherLecture || '',
                         teacherPractice: sub.teacherPractice || '',
-                        // Якщо поле відсутнє (старий предмет), вважаємо його true
                         hasQueue: sub.hasQueue !== undefined ? sub.hasQueue : true,
                         hasTopics: sub.hasTopics !== undefined ? sub.hasTopics : true,
                         hasHomework: sub.hasHomework !== undefined ? sub.hasHomework : true,
@@ -92,7 +132,6 @@
                 }
             };
 
-            // Компонент перемикача
             const Toggle = ({ label, checked, onChange }) => (
                 <div className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                     <span className="text-sm font-medium text-gray-700">{label}</span>
@@ -107,7 +146,10 @@
                 <div className="p-4 animate-enter pb-24">
                     <div className="flex justify-between items-center mb-6">
                         <h1 className="text-2xl font-bold text-gray-800">Дисципліни</h1>
-                        {isAdmin && <button onClick={() => openModal()} className="p-2 bg-blue-100 text-blue-600 rounded-full"><Icons.Plus /></button>}
+                        <div className="flex gap-2">
+                             <button onClick={onOpenSettings} className="p-2 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition"><Icons.Settings /></button>
+                            {isAdmin && <button onClick={() => openModal()} className="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition"><Icons.Plus /></button>}
+                        </div>
                     </div>
 
                     <div className="grid gap-3">
@@ -154,7 +196,6 @@
         function SubjectDetails({ subject, user, isAdmin, onNavigate, onBack }) {
             if (!subject) return <div className="p-10 text-center"><button onClick={onBack} className="text-blue-500">Назад</button></div>;
 
-            // Деструктуризація з дефолтними значеннями (для сумісності зі старими даними)
             const { hasQueue = true, hasTopics = true, hasHomework = true } = subject;
 
             return (
@@ -260,6 +301,11 @@
             const join = async (pos, adminAddId = null) => {
                 if(!labNum) return alert('Введіть номер лабораторної!');
                 
+                // Перевірка ПІБ
+                if (!adminAddId && !user.officialName) {
+                    if (!confirm("Ви не вказали своє ПІБ в налаштуваннях. Використати ім'я з Telegram?")) return;
+                }
+
                 const body = { 
                     queueId: queue._id, 
                     telegramId: user?.id, 
@@ -311,9 +357,8 @@
             }
 
             if(!queue) return <div className="p-10 text-center">Завантаження...</div>;
-            const STATUS_COLORS = { preparing: 'bg-yellow-50 border-yellow-300', defending: 'bg-green-50 border-green-300', completed: 'bg-blue-50 border-blue-300', waiting: 'bg-white border-gray-200' };
 
-            const filteredUsers = allUsers.filter(u => u.fullName?.toLowerCase().includes(searchUser.toLowerCase()));
+            const filteredUsers = allUsers.filter(u => (u.officialName || u.fullName)?.toLowerCase().includes(searchUser.toLowerCase()));
 
             return (
                 <div className="min-h-screen bg-gray-50 pb-20 animate-enter">
@@ -330,46 +375,81 @@
                         )}
                     </div>
                     
-                    <div className="p-2 grid grid-cols-4 gap-2">
-                        {Array.from({length: 31}, (_, i) => i+1).map(i => {
+                    <div className="p-2 grid grid-cols-3 gap-2">
+                        {Array.from({length: 30}, (_, i) => i+1).map(i => {
                             const entry = queue.entries.find(e => e.position === i);
-                            const style = entry ? STATUS_COLORS[entry.status] || 'bg-white' : 'bg-white border-dashed border-gray-300 opacity-70';
+                            const statusInfo = entry ? QUEUE_STATUSES[entry.status] : null;
+                            const cardColor = statusInfo ? statusInfo.color : 'bg-white';
                             
                             return (
                                 <div key={i} onClick={() => setSelectedSlot({ i, entry })} 
-                                    className={`aspect-square rounded-xl border-2 flex flex-col items-center justify-center p-1 relative cursor-pointer active:scale-95 transition ${style}`}>
-                                    <span className="absolute top-0.5 left-1 text-[8px] font-bold text-gray-400">{i}</span>
+                                    className={`aspect-[4/5] rounded-xl border flex flex-col p-2 relative cursor-pointer active:scale-95 transition shadow-sm ${cardColor} ${!entry ? 'border-dashed border-gray-300 opacity-80' : 'border-gray-200'}`}>
+                                    
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className="text-xs font-bold text-gray-400">#{i}</span>
+                                        {entry && <div className="text-sm">{statusInfo?.icon}</div>}
+                                    </div>
+
                                     {entry ? (
-                                        <>
-                                            <div className="text-[9px] font-bold text-center leading-tight overflow-hidden h-6 flex items-center justify-center w-full">{entry.user?.fullName || 'Гість'}</div>
-                                            <div className="text-[9px] font-bold bg-white/50 px-1 rounded mt-0.5">Лб {entry.labNumber}</div>
-                                        </>
-                                    ) : <span className="text-gray-300 text-xl">+</span>}
+                                        <div className="flex flex-col items-center flex-1 w-full overflow-hidden">
+                                            {/* Аватар */}
+                                            <div className="w-10 h-10 rounded-full bg-gray-200 mb-2 overflow-hidden border">
+                                                {entry.user?.avatarUrl ? (
+                                                    <img src={entry.user.avatarUrl} className="w-full h-full object-cover" alt="ava" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs font-bold bg-gray-100">
+                                                        {(entry.user?.officialName || entry.user?.fullName || '?')[0]}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            {/* ПІБ - пріоритет officialName */}
+                                            <div className="text-[10px] font-bold text-center leading-tight line-clamp-2 w-full">
+                                                {entry.user?.officialName || entry.user?.fullName || 'Гість'}
+                                            </div>
+                                            
+                                            {/* Лабораторна */}
+                                            <div className="mt-auto pt-1">
+                                                 <span className="text-[9px] font-bold bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">
+                                                    Лб {entry.labNumber}
+                                                 </span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex-1 flex items-center justify-center">
+                                            <span className="text-gray-300 text-2xl">+</span>
+                                        </div>
+                                    )}
                                 </div>
                             )
                         })}
                     </div>
 
+                    {/* Модалка слота */}
                     {selectedSlot && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onClick={() => setSelectedSlot(null)}>
                             <div className="bg-white w-full max-w-sm rounded-2xl p-5" onClick={e => e.stopPropagation()}>
                                 <h3 className="text-xl font-bold mb-4">Слот #{selectedSlot.i}</h3>
                                 {selectedSlot.entry ? (
-                                    <>
-                                        <p className="mb-2 text-lg">{selectedSlot.entry.user?.fullName}</p>
-                                        <p className="text-sm text-gray-500 mb-4">Лабораторна №{selectedSlot.entry.labNumber}</p>
+                                    <div className="text-center mb-6">
+                                        <div className="w-20 h-20 rounded-full bg-gray-200 mx-auto mb-3 overflow-hidden border-2 border-white shadow">
+                                             {selectedSlot.entry.user?.avatarUrl ? <img src={selectedSlot.entry.user.avatarUrl} className="w-full h-full object-cover" alt="avatar" /> : null}
+                                        </div>
+                                        <p className="text-xl font-bold">{selectedSlot.entry.user?.officialName || selectedSlot.entry.user?.fullName}</p>
+                                        <p className="text-sm text-gray-500 mb-2">@{selectedSlot.entry.user?.username || 'no_username'}</p>
+                                        <div className="inline-block bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded">Лабораторна №{selectedSlot.entry.labNumber}</div>
+                                        
                                         {isAdmin && (
-                                            <div className="space-y-3">
+                                            <div className="mt-6 space-y-3 text-left">
                                                 <div className="grid grid-cols-2 gap-2">
-                                                    <button onClick={() => setStatus(selectedSlot.entry.userId, 'preparing')} className="p-2 bg-yellow-50 text-yellow-700 rounded-lg text-sm font-bold">Готується</button>
-                                                    <button onClick={() => setStatus(selectedSlot.entry.userId, 'defending')} className="p-2 bg-green-50 text-green-700 rounded-lg text-sm font-bold">Здає</button>
-                                                    <button onClick={() => setStatus(selectedSlot.entry.userId, 'completed')} className="p-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-bold">Здав</button>
-                                                    <button onClick={() => setStatus(selectedSlot.entry.userId, 'waiting')} className="p-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold">Очікує</button>
+                                                    {Object.entries(QUEUE_STATUSES).map(([key, val]) => (
+                                                         <button key={key} onClick={() => setStatus(selectedSlot.entry.userId, key)} className={`p-2 rounded-lg text-sm font-bold border ${val.color} opacity-80 hover:opacity-100`}>{val.icon} {val.label}</button>
+                                                    ))}
                                                 </div>
                                                 <button onClick={() => kick(selectedSlot.entry.userId)} className="w-full bg-red-100 text-red-600 py-2 rounded-lg font-bold">Видалити з черги</button>
                                             </div>
                                         )}
-                                    </>
+                                    </div>
                                 ) : (
                                     <>
                                         {(queue.isActive || isAdmin) ? (
@@ -396,8 +476,9 @@
                                 <input placeholder="Пошук..." className="p-2 border rounded-lg mb-4" value={searchUser} onChange={e => setSearchUser(e.target.value)} />
                                 <div className="overflow-y-auto flex-1 space-y-2">
                                     {filteredUsers.map(u => (
-                                        <div key={u._id} onClick={() => join(targetSlot, u._id)} className="p-3 bg-gray-50 rounded-lg font-bold active:bg-blue-100">
-                                            {u.fullName}
+                                        <div key={u._id} onClick={() => join(targetSlot, u._id)} className="p-3 bg-gray-50 rounded-lg font-bold active:bg-blue-100 border flex justify-between">
+                                            <span>{u.officialName || u.fullName}</span>
+                                            {u.officialName && <span className="text-xs bg-green-100 text-green-700 px-1 rounded">ПІБ</span>}
                                         </div>
                                     ))}
                                 </div>
@@ -651,8 +732,7 @@
         function App() {
             const [history, setHistory] = useState([{ view: 'home', data: null }]);
             const [user, setUser] = useState(null);
-            
-            // ADMIN IDS
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const ADMIN_IDS = [1876094081, 1117478810]; 
 
             useEffect(() => {
@@ -661,21 +741,26 @@
                     tg.ready(); tg.expand();
                     const u = tg.initDataUnsafe?.user;
                     if(u) {
+                        // Оновлено: надсилаємо avatarUrl (photo_url)
                         fetch(`${API}/users/update`, { 
                             method: 'POST', 
                             headers: {'Content-Type': 'application/json'}, 
-                            body: JSON.stringify({ telegramId: u.id, fullName: `${u.first_name} ${u.last_name||''}`.trim(), username: u.username }) 
+                            body: JSON.stringify({ 
+                                telegramId: u.id, 
+                                fullName: `${u.first_name} ${u.last_name||''}`.trim(), 
+                                username: u.username,
+                                avatarUrl: u.photo_url 
+                            }) 
                         });
                         
                         fetch(`${API}/users`).then(r => r.json()).then(users => {
                             const found = users.find(x => x.telegramId === u.id);
-                            if(found) setUser({ ...u, _mongoId: found._id });
+                            if(found) setUser({ ...u, ...found, _mongoId: found._id });
                             else setUser({ ...u, _mongoId: null }); 
                         });
                     }
                 } else {
-                    // Dev mock
-                    setUser({ id: 1876094081, first_name: "Admin", _mongoId: "dev_id" });
+                    setUser({ id: 1876094081, first_name: "Admin", _mongoId: "dev_id", fullName: "Admin Dev" });
                 }
             }, []);
 
@@ -693,34 +778,32 @@
                 setHistory(prev => [...prev, { view, data }]);
             };
 
-            const back = () => {
-                if (history.length > 1) {
-                    setHistory(prev => prev.slice(0, -1));
-                }
-            };
-            
-            const goToTab = (view) => {
-                setHistory([{ view, data: null }]);
-            }
+            const back = () => { if (history.length > 1) { setHistory(prev => prev.slice(0, -1)); } };
+            const goToTab = (view) => { setHistory([{ view, data: null }]); }
 
             useEffect(() => {
                 const tg = window.Telegram?.WebApp;
                 if (!tg) return;
-                if (history.length > 1) {
-                    tg.BackButton.show();
-                    tg.BackButton.onClick(back);
-                } else {
-                    tg.BackButton.hide();
-                    tg.BackButton.offClick(back);
-                }
+                if (history.length > 1) { tg.BackButton.show(); tg.BackButton.onClick(back); } else { tg.BackButton.hide(); tg.BackButton.offClick(back); }
                 return () => tg.BackButton.offClick(back);
             }, [history]);
+
+            const saveSettings = async (officialName) => {
+                if(!user) return;
+                await fetch(`${API}/users/update`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ telegramId: user.id, username: user.username, officialName })
+                });
+                setUser({...user, officialName});
+                setIsSettingsOpen(false);
+            };
 
             const isAdmin = user && ADMIN_IDS.includes(user.id);
 
             const render = () => {
                 switch(active.view) {
-                    case 'home': return <SubjectsList user={user} isAdmin={isAdmin} onNavigate={navigate} />;
+                    case 'home': return <SubjectsList user={user} isAdmin={isAdmin} onNavigate={navigate} onOpenSettings={() => setIsSettingsOpen(true)} />;
                     case 'details': return <SubjectDetails subject={active.data} user={user} isAdmin={isAdmin} onNavigate={navigate} onBack={back} />;
                     case 'queue': return <Queue subject={active.data} user={user} isAdmin={isAdmin} onBack={back} />;
                     case 'topics': return <Topics subject={active.data} user={user} isAdmin={isAdmin} onBack={back} />;
@@ -734,6 +817,8 @@
                 <div className="max-w-md mx-auto min-h-screen font-sans text-gray-900 pb-20">
                     {render()}
                     
+                    <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} user={user} onSave={saveSettings} />
+
                     {history.length === 1 && (
                         <div className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-2 pb-6 z-50">
                             <button onClick={() => goToTab('home')} className={`flex flex-col items-center p-2 rounded-xl w-20 transition ${active.view==='home'?'text-blue-600 bg-blue-50':'text-gray-400'}`}>

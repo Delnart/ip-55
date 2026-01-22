@@ -29,6 +29,34 @@ class QueueConfig(BaseModel):
 async def get_all_users():
     return await UsersManager.get_all_users()
 
+@router.post("/users/update")
+async def update_user(data: dict):
+    update_data = {
+        "username": data["username"],
+        "avatarUrl": data.get("avatarUrl")
+    }
+    
+    if "fullName" in data:
+        update_data["fullName"] = data["fullName"]
+        
+    if "officialName" in data:
+        update_data["officialName"] = data["officialName"]
+
+    await db.db.users.update_one(
+        {"telegramId": data["telegramId"]},
+        {"$set": update_data},
+        upsert=True
+    )
+    return {"success": True}
+
+@router.get("/users/{telegram_id}")
+async def get_user(telegram_id: int):
+    user = await db.db.users.find_one({"telegramId": telegram_id})
+    if user:
+        user["_id"] = str(user["_id"])
+        return user
+    return None
+
 # --- Subjects ---
 @router.get("/subjects")
 async def get_subjects():
@@ -38,7 +66,6 @@ async def get_subjects():
 
 @router.post("/subjects")
 async def create_subject(subject: SubjectModel):
-    # .dict() збереже і нові поля
     result = await db.db.subjects.insert_one(subject.dict())
     return {"success": True, "id": str(result.inserted_id)}
 
@@ -67,6 +94,8 @@ async def get_queue(subject_id: str):
                 entry["user"] = {
                     "_id": str(user["_id"]),
                     "fullName": user.get("fullName"),
+                    "officialName": user.get("officialName"), # Додано
+                    "avatarUrl": user.get("avatarUrl"),       # Додано
                     "telegramId": user.get("telegramId")
                 }
         entries_data.append(entry)
@@ -115,6 +144,10 @@ async def join_queue(data: dict):
     else:
         user = await db.db.users.find_one({"telegramId": data["telegramId"]})
         if not user: raise HTTPException(404, "User not found")
+        
+        if not user.get("officialName"):
+            raise HTTPException(400, "Будь ласка, вкажіть ваше ПІБ в налаштуваннях!")
+            
         user_id = str(user["_id"])
 
     entries = queue.get("entries", [])
@@ -231,12 +264,3 @@ async def delete_hw(hw_id: str, adminId: int):
 @router.get("/schedule")
 async def get_schedule():
     return await ScheduleAPI.get_schedule()
-
-@router.post("/users/update")
-async def update_user(data: dict):
-    await db.db.users.update_one(
-        {"telegramId": data["telegramId"]},
-        {"$set": {"fullName": data["fullName"], "username": data["username"], "avatarUrl": data.get("avatarUrl")}},
-        upsert=True
-    )
-    return {"success": True}
