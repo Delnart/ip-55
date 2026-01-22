@@ -43,6 +43,8 @@
             'preparing': { label: 'Готується', color: 'bg-yellow-100', icon: '📝' },
             'defending': { label: 'Здає', color: 'bg-green-100', icon: '▶️' },
             'completed': { label: 'Здав', color: 'bg-blue-100', icon: '✅' },
+            'failed': { label: 'Не здав', color: 'bg-red-100', icon: '❌' },
+            'skipped': { label: 'Пропустив', color: 'bg-gray-100', icon: '⏭️' }
         };
 
         // --- COMPONENTS ---
@@ -733,11 +735,15 @@
             const [history, setHistory] = useState([{ view: 'home', data: null }]);
             const [user, setUser] = useState(null);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+            const [isTelegram, setIsTelegram] = useState(false); // Новий стейт
             const ADMIN_IDS = [1876094081, 1117478810]; 
 
             useEffect(() => {
                 const tg = window.Telegram?.WebApp;
-                if(tg) {
+                
+                // Перевірка на наявність initData (є тільки в Telegram)
+                if (tg && tg.initData) {
+                    setIsTelegram(true);
                     tg.ready(); tg.expand();
                     const u = tg.initDataUnsafe?.user;
                     if(u) {
@@ -760,9 +766,22 @@
                         });
                     }
                 } else {
-                    setUser({ id: 1876094081, first_name: "Admin", _mongoId: "dev_id", fullName: "Admin Dev" });
+                    // Блокуємо доступ, якщо не Telegram
+                    setIsTelegram(false);
                 }
             }, []);
+
+            // Екран блокування для браузера
+            if (!isTelegram) {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-50">
+                        <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-6 text-4xl">🤖</div>
+                        <h1 className="text-2xl font-bold text-gray-900 mb-2">Доступ заборонено</h1>
+                        <p className="text-gray-500 mb-6">Цей додаток працює виключно всередині Telegram.</p>
+                        <p className="text-sm text-gray-400">Будь ласка, відкрийте бота та натисніть кнопку в меню.</p>
+                    </div>
+                );
+            }
 
             const active = history[history.length - 1];
 
