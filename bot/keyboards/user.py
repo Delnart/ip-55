@@ -4,7 +4,6 @@ from config import WEBAPP_URL
 def get_main_keyboard() -> ReplyKeyboardMarkup:
     """Головна клавіатура для користувачів"""
     keyboard = [
-        [KeyboardButton(text="📱 Відкрити додаток", web_app=WebAppInfo(url=WEBAPP_URL))],
         [KeyboardButton(text="📅 Розклад на сьогодні"), KeyboardButton(text="📅 Розклад на завтра")],
         [KeyboardButton(text="📄 Поточний тиждень"), KeyboardButton(text="📄 Наступний тиждень")],
         [KeyboardButton(text="🔗 Посилання на пари")]
