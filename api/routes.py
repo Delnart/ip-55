@@ -16,7 +16,9 @@ class TeacherModel(BaseModel):
     contact: Optional[str] = None  
 
 class ResourcesModel(BaseModel):
-    telegram: Optional[str] = None
+    telegram: Optional[str] = None 
+    telegramLecture: Optional[str] = None 
+    telegramPractice: Optional[str] = None 
     classroom: Optional[str] = None
     lectureLink: Optional[str] = None
     practiceLink: Optional[str] = None

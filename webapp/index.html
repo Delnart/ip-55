@@ -96,7 +96,7 @@
             // State for Form
             const [form, setForm] = useState({ name: '', hasQueue: true, hasTopics: true, hasHomework: true });
             const [teachers, setTeachers] = useState([]);
-            const [resources, setResources] = useState({ telegram: '', classroom: '', lectureLink: '', practiceLink: '' });
+            const [resources, setResources] = useState({ telegram: '', telegramLecture: '', telegramPractice: '', classroom: '', lectureLink: '', practiceLink: '' });
 
             useEffect(() => {
                 fetch(`${API}/subjects`).then(r => r.json()).then(setSubjects).catch(err => console.error(err));
@@ -112,11 +112,11 @@
                         hasHomework: sub.hasHomework ?? true,
                     });
                     setTeachers(sub.teachers || []);
-                    setResources(sub.resources || { telegram: '', classroom: '', lectureLink: '', practiceLink: '' });
+                    setResources(sub.resources || { telegram: '', telegramLecture: '', telegramPractice: '', classroom: '', lectureLink: '', practiceLink: '' });
                 } else {
                     setForm({ name: '', hasQueue: true, hasTopics: true, hasHomework: true });
                     setTeachers([]);
-                    setResources({ telegram: '', classroom: '', lectureLink: '', practiceLink: '' });
+                    setResources({ telegram: '', telegramLecture: '', telegramPractice: '', classroom: '', lectureLink: '', practiceLink: '' });
                 }
                 setIsModalOpen(true);
             };
@@ -216,7 +216,10 @@
 
                                 <div className="mb-4">
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Ресурси (посилання)</label>
-                                    <input placeholder="Telegram група" className="w-full p-2 bg-gray-50 rounded mb-2 border text-sm" value={resources.telegram} onChange={e => setResources({...resources, telegram: e.target.value})} />
+                                    <div className="grid grid-cols-2 gap-2 mb-2">
+                                        <input placeholder="TG Лекції (Потік)" className="p-2 bg-gray-50 rounded border text-sm" value={resources.telegramLecture || resources.telegram || ''} onChange={e => setResources({...resources, telegramLecture: e.target.value})} />
+                                        <input placeholder="TG Практика (Група)" className="p-2 bg-gray-50 rounded border text-sm" value={resources.telegramPractice || ''} onChange={e => setResources({...resources, telegramPractice: e.target.value})} />
+                                    </div>
                                     <input placeholder="Google Classroom" className="w-full p-2 bg-gray-50 rounded mb-2 border text-sm" value={resources.classroom} onChange={e => setResources({...resources, classroom: e.target.value})} />
                                     <input placeholder="Посилання на лекцію (Meet/Zoom)" className="w-full p-2 bg-gray-50 rounded mb-2 border text-sm" value={resources.lectureLink} onChange={e => setResources({...resources, lectureLink: e.target.value})} />
                                     <input placeholder="Посилання на практику" className="w-full p-2 bg-gray-50 rounded mb-2 border text-sm" value={resources.practiceLink} onChange={e => setResources({...resources, practiceLink: e.target.value})} />
@@ -352,7 +355,7 @@
         
         function Resources({ subject, onBack }) {
             const res = subject.resources || {};
-            const isEmpty = !res.telegram && !res.classroom && !res.lectureLink && !res.practiceLink;
+            const isEmpty = !res.telegram && !res.telegramLecture && !res.telegramPractice && !res.classroom && !res.lectureLink && !res.practiceLink;
 
             const LinkCard = ({ url, title, sub, color }) => {
                 if(!url) return null;
@@ -376,7 +379,9 @@
                     <div className="p-5 space-y-3">
                         {isEmpty && <div className="text-center text-gray-400 py-10">Посилання ще не додані.</div>}
                         
-                        <LinkCard url={res.telegram} title="Telegram Група" sub="Чат або канал предмета" color="bg-blue-50 border-blue-100" />
+                        <LinkCard url={res.telegramLecture || res.telegram} title="Telegram (Лекції)" sub="Чат потоку" color="bg-blue-50 border-blue-100" />
+                        <LinkCard url={res.telegramPractice} title="Telegram (Практика)" sub="Чат групи" color="bg-indigo-50 border-indigo-100" />
+                        
                         <LinkCard url={res.classroom} title="Google Classroom" sub="Завдання та матеріали" color="bg-green-50 border-green-100" />
                         <LinkCard url={res.lectureLink} title="Лекція" sub="Meet / Zoom" color="bg-purple-50 border-purple-100" />
                         <LinkCard url={res.practiceLink} title="Практика" sub="Meet / Zoom" color="bg-orange-50 border-orange-100" />
@@ -385,11 +390,6 @@
             )
         }
 
-        // --- Other existing components (Queue, Topics, Homework, Schedule) remain unchanged ---
-        // (Just pasting the Queue/Topics/Homework/Schedule/App components from previous context to keep full file working)
-        // Note: For brevity in chat, I will include the Queue/Topics/Homework/Schedule but assume you can copy them from previous version if needed, 
-        // BUT user asked for "full code". So I must include them.
-        
         function Queue({ subject, user, isAdmin, onBack }) {
             const [queue, setQueue] = useState(null);
             const [labNum, setLabNum] = useState('');
