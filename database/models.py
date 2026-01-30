@@ -6,12 +6,11 @@ from bson import ObjectId
 logger = logging.getLogger(__name__)
 
 class LinksManager:
-    """Клас для роботи з посиланнями на пари"""
+    """Клас для роботи з посиланнями на пари (старий функціонал, залишаємо для сумісності з ботом)"""
     
     @staticmethod
     async def add_link(subject_name: str, teacher_name: str, class_type: str, 
                       meet_link: str, classroom_link: Optional[str] = None) -> bool:
-        """Додавання посилання на пару"""
         try:
             link_data = {
                 "subject_name": subject_name,
@@ -32,118 +31,72 @@ class LinksManager:
                 {"$set": link_data},
                 upsert=True
             )
-            
-            logger.info(f"Посилання додано/оновлено: {subject_name} - {teacher_name}")
             return True
-            
         except Exception as e:
             logger.error(f"Помилка додавання посилання: {e}")
             return False
     
     @staticmethod
     async def get_link(subject_name: str, teacher_name: str, class_type: str) -> Optional[Dict[str, Any]]:
-        """Отримання посилання на пару з гнучким пошуком"""
         try:
+            # Спроба точного пошуку
             link = await db.db.links.find_one({
                 "subject_name": subject_name,
                 "teacher_name": teacher_name,
                 "class_type": class_type
             })
+            if link: return link
             
-            if link:
-                return link
-            
+            # Спроба пошуку без типу пари
             link = await db.db.links.find_one({
                 "subject_name": subject_name,
                 "teacher_name": teacher_name
             })
-            
-            if link:
-                return link
-            
+            if link: return link
+
+            # Пошук тільки за назвою предмета
             link = await db.db.links.find_one({
                 "subject_name": subject_name
             })
+            if link: return link
             
-            if link:
-                return link
-            
-            link = await db.db.links.find_one({
-                "subject_name": {"$regex": subject_name.replace(" ", ".*"), "$options": "i"}
-            })
-            
-            if link:
-                return link
-            
-            link = await db.db.links.find_one({
-                "teacher_name": {"$regex": teacher_name.replace(" ", ".*"), "$options": "i"}
-            })
-            
-            return link
-            
+            return None
         except Exception as e:
             logger.error(f"Помилка отримання посилання: {e}")
             return None
     
     @staticmethod
     async def get_all_links() -> List[Dict[str, Any]]:
-        """Отримання всіх посилань"""
         try:
-            cursor = db.db.links.find({})
-            links = await cursor.to_list(length=None)
-            return links
+            return await db.db.links.find({}).to_list(length=None)
         except Exception as e:
             logger.error(f"Помилка отримання всіх посилань: {e}")
             return []
     
     @staticmethod
     async def delete_link(subject_name: str, teacher_name: str, class_type: str) -> bool:
-        """Видалення посилання"""
         try:
             result = await db.db.links.delete_one({
                 "subject_name": subject_name,
                 "teacher_name": teacher_name,
                 "class_type": class_type
             })
-            
-            if result.deleted_count > 0:
-                logger.info(f"Посилання видалено: {subject_name} - {teacher_name}")
-                return True
-            return False
-            
+            return result.deleted_count > 0
         except Exception as e:
             logger.error(f"Помилка видалення посилання: {e}")
             return False
-    
-    @staticmethod
-    async def search_links_by_subject(subject_name: str) -> List[Dict[str, Any]]:
-        """Пошук посилань по назві предмета (для діагностики)"""
-        try:
-            cursor = db.db.links.find({
-                "subject_name": {"$regex": subject_name, "$options": "i"}
-            })
-            links = await cursor.to_list(length=None)
-            return links
-        except Exception as e:
-            logger.error(f"Помилка пошуку посилань: {e}")
-            return []
-        
+
 class SettingsManager:
-    """Клас для керування глобальними налаштуваннями бота"""
-    
     @staticmethod
     async def get_setting(key: str, default: Any = None) -> Any:
-        """Отримання значення налаштування"""
         try:
             doc = await db.db.settings.find_one({"key": key})
             return doc["value"] if doc else default
-        except Exception as e:
-            logger.error(f"Помилка отримання налаштування {key}: {e}")
+        except Exception:
             return default
 
     @staticmethod
     async def set_setting(key: str, value: Any) -> bool:
-        """Встановлення значення налаштування"""
         try:
             await db.db.settings.update_one(
                 {"key": key},
@@ -156,12 +109,8 @@ class SettingsManager:
             return False
         
 class GroupMembersManager:
-    """Клас для роботи з учасниками групи"""
-    
     @staticmethod
-    async def add_member(user_id: int, username: str, first_name: str, 
-                        last_name: Optional[str] = None) -> bool:
-        """Додавання учасника групи"""
+    async def add_member(user_id: int, username: str, first_name: str, last_name: Optional[str] = None) -> bool:
         try:
             member_data = {
                 "user_id": user_id,
@@ -171,107 +120,73 @@ class GroupMembersManager:
                 "joined_at": datetime.utcnow(),
                 "is_active": True
             }
-            
-            result = await db.db.group_members.update_one(
+            await db.db.group_members.update_one(
                 {"user_id": user_id},
                 {"$set": member_data},
                 upsert=True
             )
-            
-            logger.info(f"Учасника додано: {username} ({user_id})")
             return True
-            
         except Exception as e:
             logger.error(f"Помилка додавання учасника: {e}")
             return False
     
     @staticmethod
     async def is_member(user_id: int) -> bool:
-        """Перевірка чи є користувач учасником групи"""
         try:
-            member = await db.db.group_members.find_one({
-                "user_id": user_id,
-                "is_active": True
-            })
+            member = await db.db.group_members.find_one({"user_id": user_id, "is_active": True})
             return member is not None
-        except Exception as e:
-            logger.error(f"Помилка перевірки учасника: {e}")
+        except Exception:
             return False
     
     @staticmethod
     async def get_all_members() -> List[Dict[str, Any]]:
-        """Отримання всіх активних учасників"""
         try:
-            cursor = db.db.group_members.find({"is_active": True})
-            members = await cursor.to_list(length=None)
-            return members
-        except Exception as e:
-            logger.error(f"Помилка отримання учасників: {e}")
+            return await db.db.group_members.find({"is_active": True}).to_list(length=None)
+        except Exception:
             return []
+
     @staticmethod
     async def set_ping_status(user_id: int, allow_ping: bool) -> bool:
-        """Встановлення дозволу на пінг для учасника"""
         try:
             result = await db.db.group_members.update_one(
                 {"user_id": user_id},
                 {"$set": {"allow_ping": allow_ping}}
             )
             return result.modified_count > 0 or result.matched_count > 0
-        except Exception as e:
-            logger.error(f"Помилка зміни статусу пінгу: {e}")
+        except Exception:
             return False
+
     @staticmethod
     async def get_member_by_username(username: str) -> Optional[Dict[str, Any]]:
-        """Пошук учасника за username (без @)"""
         try:
             return await db.db.group_members.find_one({
                 "username": {"$regex": f"^{username}$", "$options": "i"},
                 "is_active": True
             })
-        except Exception as e:
-            logger.error(f"Помилка пошуку учасника: {e}")
+        except Exception:
             return None
+
     @staticmethod
     async def remove_member(user_id: int) -> bool:
-        """Видалення учасника (позначення як неактивний)"""
         try:
             result = await db.db.group_members.update_one(
                 {"user_id": user_id},
                 {"$set": {"is_active": False}}
             )
-            
-            if result.modified_count > 0:
-                logger.info(f"Учасника деактивовано: {user_id}")
-                return True
+            return result.modified_count > 0
+        except Exception:
             return False
             
-        except Exception as e:
-            logger.error(f"Помилка видалення учасника: {e}")
-            return False
     @staticmethod
     async def get_muted_members() -> List[Dict[str, Any]]:
-        """Отримання списку учасників з вимкненим пінгом"""
         try:
-            cursor = db.db.group_members.find({"allow_ping": False, "is_active": True})
-            members = await cursor.to_list(length=None)
-            return members
-        except Exception as e:
-            logger.error(f"Помилка отримання muted учасників: {e}")
+            return await db.db.group_members.find({"allow_ping": False, "is_active": True}).to_list(length=None)
+        except Exception:
             return []
-        
 
-class Models:
-    @staticmethod
-    async def get_all_links() -> List[Dict]:
-        return await db.db.links.find({}).to_list(length=None)
-
-    @staticmethod
-    async def get_subject_links(subject_name: str) -> List[Dict]:
-        return await db.db.links.find({"subject_name": subject_name}).to_list(length=None)
 class UsersManager:
     @staticmethod
     async def get_all_users():
-        """Отримати всіх користувачів для вибору адміном"""
         users = await db.db.users.find({}).to_list(length=None)
         for u in users: u["_id"] = str(u["_id"])
         return users
@@ -279,17 +194,23 @@ class UsersManager:
 class SubjectsManager:
     @staticmethod
     async def update_subject(id: str, data: dict):
+        update_data = {
+            "name": data["name"],
+            "teachers": data.get("teachers", []),
+            "resources": data.get("resources", {}),
+            
+            "teacherLecture": data.get("teacherLecture"),
+            "teacherPractice": data.get("teacherPractice"),
+            
+            "note": data.get("note"),
+            "hasQueue": data.get("hasQueue", True),
+            "hasTopics": data.get("hasTopics", True),
+            "hasHomework": data.get("hasHomework", True)
+        }
+        
         await db.db.subjects.update_one(
             {"_id": ObjectId(id)},
-            {"$set": {
-                "name": data["name"], 
-                "teacherLecture": data.get("teacherLecture"),
-                "teacherPractice": data.get("teacherPractice"),
-                "note": data.get("note"),
-                "hasQueue": data.get("hasQueue", True),
-                "hasTopics": data.get("hasTopics", True),
-                "hasHomework": data.get("hasHomework", True)
-            }}
+            {"$set": update_data}
         )
 
 class HomeworkManager:
@@ -348,12 +269,10 @@ class TopicsManager:
 
     @staticmethod
     async def toggle_topic(topic_id: str, user_id: str, user_name: str):
-        """Логіка: одна людина може взяти декілька тем. Одна тема може бути взята декількома людьми."""
         topic = await db.db.topics.find_one({"_id": ObjectId(topic_id)})
         if not topic: return False
         
         users = topic.get("users", [])
-        
         existing_user = next((u for u in users if u["userId"] == user_id), None)
         
         if existing_user:

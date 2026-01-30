@@ -10,8 +10,21 @@ from bson import ObjectId
 
 router = APIRouter()
 
+class TeacherModel(BaseModel):
+    name: str
+    type: str 
+    contact: Optional[str] = None  
+
+class ResourcesModel(BaseModel):
+    telegram: Optional[str] = None
+    classroom: Optional[str] = None
+    lectureLink: Optional[str] = None
+    practiceLink: Optional[str] = None
+
 class SubjectModel(BaseModel):
     name: str
+    teachers: List[TeacherModel] = []
+    resources: ResourcesModel = ResourcesModel()
     teacherLecture: Optional[str] = None
     teacherPractice: Optional[str] = None
     note: Optional[str] = None
@@ -35,12 +48,8 @@ async def update_user(data: dict):
         "username": data["username"],
         "avatarUrl": data.get("avatarUrl")
     }
-    
-    if "fullName" in data:
-        update_data["fullName"] = data["fullName"]
-        
-    if "officialName" in data:
-        update_data["officialName"] = data["officialName"]
+    if "fullName" in data: update_data["fullName"] = data["fullName"]
+    if "officialName" in data: update_data["officialName"] = data["officialName"]
 
     await db.db.users.update_one(
         {"telegramId": data["telegramId"]},
@@ -94,8 +103,8 @@ async def get_queue(subject_id: str):
                 entry["user"] = {
                     "_id": str(user["_id"]),
                     "fullName": user.get("fullName"),
-                    "officialName": user.get("officialName"), # Додано
-                    "avatarUrl": user.get("avatarUrl"),       # Додано
+                    "officialName": user.get("officialName"),
+                    "avatarUrl": user.get("avatarUrl"),
                     "telegramId": user.get("telegramId")
                 }
         entries_data.append(entry)
@@ -144,17 +153,13 @@ async def join_queue(data: dict):
     else:
         user = await db.db.users.find_one({"telegramId": data["telegramId"]})
         if not user: raise HTTPException(404, "User not found")
-        
         if not user.get("officialName"):
             raise HTTPException(400, "Будь ласка, вкажіть ваше ПІБ в налаштуваннях!")
-            
         user_id = str(user["_id"])
 
     entries = queue.get("entries", [])
-    
     if any(e["userId"] == user_id for e in entries) and not is_admin_add:
         raise HTTPException(400, "Ви вже в черзі")
-        
     if any(e["position"] == data["position"] for e in entries):
         raise HTTPException(400, "Місце зайняте")
 
