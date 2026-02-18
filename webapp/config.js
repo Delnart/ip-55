@@ -3,7 +3,7 @@ export const CONFIG = {
   
   KPI_API_URL: 'https://api.campus.kpi.ua/schedule/lessons',
   
-  KPI_GROUP_ID: process.env.REACT_APP_KPI_GROUP_ID || 'ec73a1ae-3542-4009-832e-2cc033ffe14b',
+  KPI_GROUP_ID: process.env.REACT_APP_KPI_GROUP_ID || '5627',
   
   QUEUE_REFRESH_INTERVAL: 5000,
   
